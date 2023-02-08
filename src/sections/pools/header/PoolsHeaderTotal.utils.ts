@@ -28,6 +28,10 @@ export const useTotalInPools = () => {
     apiIds.data?.usdId,
   )
 
+  // const positions = useOmnipoolPositions(
+  //   uniques.data?.map((u) => u.itemId) ?? [],
+  // )
+
   const queries = [apiIds, assets, metas, ...balances, ...spotPrices]
   const isLoading = queries.some((q) => q.isInitialLoading)
 
@@ -50,6 +54,20 @@ export const useTotalInPools = () => {
 
         if (!meta || !balance?.data?.balance || !sp?.data?.spotPrice)
           return BN_0
+
+        const params: Parameters<typeof calculate_liquidity_out> = [
+          balance.data.balance.toString(),
+          asset.data.hubReserve.toString(),
+          asset.data.shares.toString(),
+          position.amount.toString(),
+          position.shares.toString(),
+          positionPrice.toFixed(0),
+          position.shares.toString(),
+        ]
+
+        const liquidityOutResult = calculate_liquidity_out.apply(this, params)
+        if (liquidityOutResult === "-1") return BN_0
+
 
         const dp = BN_10.pow(meta.decimals.toString())
         const value = balance.data.balance.times(sp?.data?.spotPrice).div(dp)

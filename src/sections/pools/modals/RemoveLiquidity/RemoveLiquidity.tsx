@@ -142,6 +142,8 @@ export const RemoveLiquidity = ({
   const removeLiquidityValues = useMemo(() => {
     const positionPrice = position.price.times(BN_10.pow(18))
     if (omnipoolBalance.data && omnipoolAsset?.data) {
+
+
       const params: Parameters<typeof calculate_liquidity_out> = [
         omnipoolBalance.data.balance.toString(),
         omnipoolAsset.data.hubReserve.toString(),
@@ -151,6 +153,8 @@ export const RemoveLiquidity = ({
         positionPrice.toFixed(0),
         removeSharesValue.toFixed(0),
       ]
+
+
       return {
         token: calculate_liquidity_out.apply(this, params),
         lrna: calculate_liquidity_lrna_out.apply(this, params),
