@@ -283,7 +283,7 @@ export const useStakeARP = (availableUserBalance: BN | undefined) => {
     const {
       filteredAccumulatedRpsUpdatedBefore,
       filteredAccumulatedRpsUpdatedAfter,
-    } = accumulatedRpsUpdated.events.reduce(
+    } = accumulatedRpsUpdated.events.slice(38, 40).reduce(
       (acc, event) => {
         const isBeforeStaking = currentBlockNumber
           .minus(lengthOfStaking)
