@@ -1,29 +1,18 @@
 import { Separator } from "components/Separator/Separator"
-import { Switch } from "components/Switch/Switch"
-import { Heading } from "components/Typography/Heading/Heading"
 import { Text } from "components/Typography/Text/Text"
-import { useTranslation } from "react-i18next"
 import { useMedia } from "react-use"
-import { PoolsHeaderTotal } from "sections/pools/header/PoolsHeaderTotal"
-import { useAccountStore } from "state/store"
 import { theme } from "theme"
-import { ClaimAllDropdown } from "sections/pools/farms/components/claimAllDropdown/ClaimAllDropdown"
 import { Fragment, ReactElement } from "react"
 import Skeleton from "react-loading-skeleton"
 import { useRpcProvider } from "providers/rpcProvider"
-
-type Props = {
-  myPositions: boolean
-  onMyPositionsChange: (value: boolean) => void
-  disableMyPositions: boolean
-}
+import { ResponsiveValue } from "utils/responsive"
 
 export const HeaderSeparator = () => {
   const isDesktop = useMedia(theme.viewport.gte.sm)
   return (
     <Separator
       sx={{
-        mb: [15, 0],
+        my: [16, 0],
         height: ["1px", "40px"],
       }}
       css={{ background: `rgba(${theme.rgbColors.white}, 0.12)` }}
@@ -35,8 +24,12 @@ export const HeaderSeparator = () => {
 export const HeaderValues = ({
   values,
   skeletonHeight,
+  fontSizeLabel,
+  className,
 }: {
-  skeletonHeight?: [number, number]
+  skeletonHeight?: ResponsiveValue<number>
+  fontSizeLabel?: ResponsiveValue<number>
+  className?: string
   values: Array<{
     label?: string
     content: ReactElement
@@ -58,7 +51,7 @@ export const HeaderValues = ({
         item.content
       ) : (
         <Skeleton
-          sx={{ height: skeletonHeight ?? [19, 28], width: [180, 200] }}
+          sx={{ height: skeletonHeight ?? [19, 28], width: [100, 200] }}
           enableAnimation={!item.disconnected}
         />
       )
@@ -68,9 +61,15 @@ export const HeaderValues = ({
         item.label ? (
           <div
             key={`${i}_content`}
-            sx={{ flex: ["row", "column"], justify: "space-between" }}
+            sx={{
+              flex: ["row", "column"],
+              align: ["center", "start"],
+              justify: "space-between",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
           >
-            <Text color="brightBlue300" sx={{ mb: 6 }}>
+            <Text color="brightBlue300" fs={fontSizeLabel} font="GeistMono">
               {item.label}
             </Text>
             {content}
@@ -91,75 +90,14 @@ export const HeaderValues = ({
     <div
       sx={{
         flex: ["column", "row"],
-        mb: 40,
+        mb: [24, 40],
         flexWrap: "wrap",
-        gap: [12, 0],
-        align: ["normal", "center"],
+        align: ["normal", "start"],
         justify: "space-between",
       }}
+      className={className}
     >
       {headerValues}
     </div>
-  )
-}
-
-const enabledFarms = import.meta.env.VITE_FF_FARMS_ENABLED === "true"
-
-export const PoolsHeader = ({
-  myPositions,
-  onMyPositionsChange,
-  disableMyPositions,
-}: Props) => {
-  const { t } = useTranslation()
-
-  const { account } = useAccountStore()
-
-  return (
-    <>
-      <div sx={{ flex: "row", justify: "space-between", mb: 43 }}>
-        <Heading fs={20} lh={26} fw={500}>
-          {t("liquidity.header.title")}
-        </Heading>
-        {!!account && (
-          <Switch
-            value={myPositions}
-            onCheckedChange={onMyPositionsChange}
-            disabled={disableMyPositions}
-            size="small"
-            name="my-positions"
-            label={t("liquidity.header.switch")}
-          />
-        )}
-      </div>
-      <HeaderValues
-        values={[
-          {
-            label: t("liquidity.header.totalLocked"),
-            content: (
-              <PoolsHeaderTotal variant="pools" myPositions={myPositions} />
-            ),
-          },
-          {
-            hidden: !enabledFarms,
-            label: t("liquidity.header.totalInFarms"),
-            content: (
-              <PoolsHeaderTotal variant="farms" myPositions={myPositions} />
-            ),
-          },
-          {
-            withoutSeparator: true,
-            label: t("liquidity.header.24hours"),
-            content: (
-              <PoolsHeaderTotal myPositions={myPositions} variant="volume" />
-            ),
-          },
-          {
-            initiallyHidden: true,
-            hidden: !enabledFarms || !account?.address,
-            content: <ClaimAllDropdown />,
-          },
-        ]}
-      />
-    </>
   )
 }

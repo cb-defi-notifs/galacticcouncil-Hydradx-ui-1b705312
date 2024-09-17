@@ -12,6 +12,8 @@ export const SButton = styled.button<ButtonProps>`
 
   transition: ${theme.transitions.slow};
 
+  height: fit-content;
+
   ${({ variant }) => variant && variantStyles[variant]}
   ${({ size }) => size && sizeStyles[size]}
   ${({ active }) =>
@@ -54,13 +56,12 @@ export const SButton = styled.button<ButtonProps>`
     `}
 `
 
-export const SContent = styled.span`
+export const SContent = styled.span<{ size: ButtonSize }>`
   display: flex;
-  gap: 10px;
+  gap: ${({ size }) => (size === "compact" || size === "micro" ? "4" : "10")}px;
   align-items: center;
   justify-content: center;
-
-  font-size: 13px;
+  white-space: nowrap;
 `
 export const SButtonTransparent = styled.button`
   background: transparent;
@@ -166,11 +167,31 @@ const variantStyles: Record<ButtonVariant, SerializedStyles> = {
       border: 1px solid ${theme.colors.brightBlue100};
     }
   `,
+  mutedSecondary: css`
+    font-weight: 500;
+    border-radius: 4px;
+    background: rgba(${theme.rgbColors.primaryA15}, 0.12);
+    color: ${theme.colors.brightBlue300};
+    border: 1px solid rgba(${theme.rgbColors.brightBlue300}, 0.4);
+    box-shadow: unset;
+
+    :hover {
+      color: ${theme.colors.white};
+      background: rgba(${theme.rgbColors.primaryA15}, 0.24);
+      border: 1px solid rgba(${theme.rgbColors.brightBlue300}, 0.8);
+    }
+
+    :active {
+      background: ${theme.colors.brightBlue400};
+      color: ${theme.colors.white};
+      border: 1px solid ${theme.colors.brightBlue100};
+    }
+  `,
   error: css`
     border-radius: 4px;
-    background: rgba(${theme.rgbColors.red100}, 0.25);
+    background: rgba(${theme.rgbColors.red400}, 0.2);
     color: ${theme.colors.red400};
-    border: 1px solid ${theme.colors.red400};
+    border: 1px solid rgba(${theme.rgbColors.red400}, 0.5);
     box-shadow: unset;
 
     :hover {
@@ -183,6 +204,45 @@ const variantStyles: Record<ButtonVariant, SerializedStyles> = {
       background: ${theme.colors.red100};
       color: ${theme.colors.red400};
       border: 1px solid ${theme.colors.red400};
+    }
+  `,
+  mutedError: css`
+    font-weight: 500;
+    border-radius: 4px;
+    background: rgba(${theme.rgbColors.red100}, 0.2);
+    color: ${theme.colors.red400};
+    border: 1px solid rgba(${theme.rgbColors.red400}, 0.5);
+    box-shadow: unset;
+
+    :hover {
+      color: ${theme.colors.white};
+      background: rgba(${theme.rgbColors.red100}, 0.4);
+      border: 1px solid rgba(${theme.rgbColors.red400}, 0.8);
+    }
+
+    :active {
+      background: ${theme.colors.red100};
+      color: ${theme.colors.white};
+      border: 1px solid ${theme.colors.red400};
+    }
+  `,
+  warning: css`
+    border-radius: 4px;
+    background: rgba(${theme.rgbColors.warning300}, 0.2);
+    color: ${theme.colors.warning100};
+    border: 1px solid rgba(${theme.rgbColors.warning300}, 0.5);
+    box-shadow: unset;
+
+    :hover {
+      background: rgba(${theme.rgbColors.warning300}, 0.1);
+      color: ${theme.colors.warning300};
+      border: 1px solid ${theme.colors.warning300};
+    }
+
+    :active {
+      background: ${theme.colors.warning300};
+      color: ${theme.colors.warning300};
+      border: 1px solid ${theme.colors.warning300};
     }
   `,
   gradient: css`
@@ -216,14 +276,21 @@ const variantStyles: Record<ButtonVariant, SerializedStyles> = {
     background: rgba(${theme.rgbColors.white}, 0.03);
     color: ${theme.colors.white};
 
-    border: 1px solid rgba(${theme.rgbColors.white}, 0.1);
+    border: 1px solid rgba(${theme.rgbColors.white}, 0.03);
 
-    :hover,
-    :active {
+    @media (avtive: avtive) {
       background: ${theme.colors.brightBlue700};
       border: 1px solid ${theme.colors.brightBlue700};
-
       transition: all ${theme.transitions.default};
+    }
+
+    @media ${theme.viewport.gte.sm} {
+      :hover {
+        background: ${theme.colors.brightBlue700};
+        border: 1px solid ${theme.colors.brightBlue700};
+
+        transition: all ${theme.transitions.default};
+      }
     }
   `,
   transparent: css`
@@ -289,6 +356,22 @@ const variantStyles: Record<ButtonVariant, SerializedStyles> = {
       transform: translate3d(3px, 3px, -1px);
     }
   `,
+  green: css`
+    border-radius: 4px;
+    background: ${theme.colors.green500};
+    color: ${theme.colors.darkBlue800};
+    box-shadow: 3px -2px 13.4px 4px rgba(146, 250, 231, 0.27);
+
+    :hover {
+      background: #71f8c5;
+      color: ${theme.colors.darkBlue800};
+    }
+
+    :active {
+      background: #c0fbe5;
+      color: ${theme.colors.darkBlue800};
+    }
+  `,
 }
 
 const sizeStyles: Record<ButtonSize, SerializedStyles> = {
@@ -300,6 +383,11 @@ const sizeStyles: Record<ButtonSize, SerializedStyles> = {
     padding: 12px 15px;
     font-size: 12px;
     line-height: 12px;
+  `,
+  compact: css`
+    padding: 6px 12px;
+    font-size: 12px;
+    line-height: 16px;
   `,
   micro: css`
     padding: 2px 10px;

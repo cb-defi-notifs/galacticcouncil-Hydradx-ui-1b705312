@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { Graph } from "components/Graph/Graph"
-import { Spinner } from "components/Spinner/Spinner.styled"
+import { Spinner } from "components/Spinner/Spinner"
 import { useLoyaltyRates } from "./LoyaltyGraph.utils"
 import { PalletLiquidityMiningLoyaltyCurve } from "@polkadot/types/lookup"
 import BigNumber from "bignumber.js"
@@ -30,20 +30,17 @@ export const LoyaltyGraph = ({
   )
 
   return (
-    <div sx={{ flex: "column", gap: 32 }}>
-      <div
-        sx={{ height: 300, flex: "row", align: "center", justify: "center" }}
-      >
-        {rates.data ? (
-          <Graph
-            labelX={t("farms.modal.details.loyalty.x")}
-            labelY={t("farms.modal.details.loyalty.y")}
-            data={rates.data}
-          />
-        ) : (
-          <Spinner width={64} height={64} />
-        )}
-      </div>
+    <div sx={{ height: 300, flex: "row", align: "center", justify: "center" }}>
+      {rates.data ? (
+        <Graph
+          labelX={t("farms.modal.details.loyalty.x")}
+          labelY={t("farms.modal.details.loyalty.y")}
+          data={rates.data}
+          offset={{ top: 0, right: 0, bottom: 16, left: 16 }}
+        />
+      ) : (
+        <Spinner size={64} />
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import { useBestNumber } from "api/chain"
-import BN from "bignumber.js"
+import BN, { BigNumber } from "bignumber.js"
 import * as wasm from "@galacticcouncil/math-staking"
-import { useAccountStore } from "state/store"
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
 import {
   TAccumulatedRpsUpdated,
   TStakingPosition,
@@ -14,12 +14,17 @@ import {
 import { useTokenBalance, useTokenLocks } from "api/balances"
 import { getHydraAccountAddress } from "utils/api"
 import { useDisplayPrice } from "utils/displayAsset"
-import { BN_0, BN_100, BN_BILL, BN_QUINTILL } from "utils/constants"
+import {
+  BN_0,
+  BN_100,
+  BN_BILL,
+  BN_QUINTILL,
+  PARACHAIN_BLOCK_TIME,
+} from "utils/constants"
 import { useMemo } from "react"
 import { useReferendums } from "api/democracy"
-//import { usePaymentInfo } from "api/transaction"
-//import { useAccountCurrency } from "api/payments"
-import { useRpcProvider } from "providers/rpcProvider"
+import { scaleHuman } from "utils/balance"
+import { useAssets } from "providers/assets"
 
 const CONVICTIONS: { [key: string]: number } = {
   none: 0.1,
@@ -34,7 +39,25 @@ const CONVICTIONS: { [key: string]: number } = {
 const lengthOfStaking = BN(50400) // min. amount of block for how long we want to calculate APR from = one week
 const blocksPerYear = 2628000
 
+/* constants that might be changed */
+const a = "20000000000000000"
+const b = "2000"
+
 export type TStakingData = NonNullable<ReturnType<typeof useStakeData>["data"]>
+
+const getVoteActionPoints = (stakeAmount: BN, referendaAmount: number) => {
+  const maxVotingPower = stakeAmount.multipliedBy(CONVICTIONS["locked6x"])
+  const maxActionPointsPerRef = 100
+
+  const points = stakeAmount
+    .multipliedBy(CONVICTIONS["locked6x"])
+    .multipliedBy(maxActionPointsPerRef)
+    .div(maxVotingPower)
+    .multipliedBy(referendaAmount)
+    .toNumber()
+
+  return points
+}
 
 const getCurrentActionPoints = (
   votes: TStakingPosition["votes"],
@@ -69,10 +92,9 @@ const getCurrentActionPoints = (
 }
 
 export const useStakeData = () => {
-  const {
-    assets: { native },
-  } = useRpcProvider()
-  const { account } = useAccountStore()
+  const { native } = useAssets()
+
+  const { account } = useAccount()
   const stake = useStake(account?.address)
   const circulatingSupply = useCirculatingSupply()
   const balance = useTokenBalance(native.id, account?.address)
@@ -83,29 +105,22 @@ export const useStakeData = () => {
   )
   const referendas = useReferendums("finished")
 
-  //const accountCurrency = useAccountCurrency(account?.address)
-
-  const stakeLocks = locks.data?.reduce(
-    (acc, lock) => (lock.type === "stk_stks" ? acc.plus(lock.amount) : acc),
+  const vestLocks = locks.data?.reduce(
+    (acc, lock) => (lock.type === "ormlvest" ? acc.plus(lock.amount) : acc),
     BN_0,
   )
 
-  const availableBalance = balance.data?.freeBalance.minus(stakeLocks ?? 0)
-  /*const { data: paymentInfoData } = usePaymentInfo(
-    api.tx.staking.increaseStake("0", availableBalance?.toString()),
-  )
+  const vested = vestLocks ?? BN_0
+  const staked = stake.data?.stakePosition?.stake ?? BN_0
+  const accumulatedLockedRewards =
+    stake.data?.stakePosition?.accumulatedLockedRewards ?? BN_0
 
-  console.log(
-    paymentInfoData?.partialFee.toString(),
-    accountCurrency,
-    "paymentInfoData",
-  )*/
+  const rawAvailableBalance = balance.data?.freeBalance
+    .minus(vested)
+    .minus(staked)
+    .minus(accumulatedLockedRewards)
 
-  //const transactionCost =
-
-  //const tx = api.tx.staking.increaseStake(positionId, amount)
-
-  //const paymentInfo = await tx.paymentInfo(account)
+  const availableBalance = BigNumber.max(0, rawAvailableBalance ?? BN_0)
 
   const queries = [
     stake,
@@ -236,10 +251,8 @@ export const useStakeData = () => {
 }
 
 export const useStakeARP = (availableUserBalance: BN | undefined) => {
-  const {
-    assets: { native },
-  } = useRpcProvider()
-  const { account } = useAccountStore()
+  const { native } = useAssets()
+  const { account } = useAccount()
   const bestNumber = useBestNumber()
   const stake = useStake(account?.address)
   const stakingEvents = useStakingEvents()
@@ -426,17 +439,13 @@ export const useStakeARP = (availableUserBalance: BN | undefined) => {
 }
 
 export const useClaimReward = () => {
-  /* constants that might be changed */
-  const a = "20000000000000000"
-  const b = "2000"
-
-  const {
-    assets: { native },
-  } = useRpcProvider()
-  const { account } = useAccountStore()
+  const { native } = useAssets()
+  const { account } = useAccount()
   const bestNumber = useBestNumber()
   const stake = useStake(account?.address)
   const stakingConsts = useStakingConsts()
+  const { data: referendums } = useReferendums("ongoing")
+
   const potAddress = getHydraAccountAddress(stakingConsts.data?.palletId)
   const potBalance = useTokenBalance(native.id, potAddress)
 
@@ -492,10 +501,6 @@ export const useClaimReward = () => {
       stakePosition.createdAt.toString(),
     )
 
-    if (BN(currentPeriod).minus(enteredAt).lte(unclaimablePeriods)) {
-      return { rewards: BN_0, unlockedRewards: BN_0, positionId }
-    }
-
     const maxRewards = wasm.calculate_rewards(
       rewardPerStake,
       stakePosition.rewardPerStake.toString(),
@@ -518,39 +523,132 @@ export const useClaimReward = () => {
       stakePosition.accumulatedSlashPoints.toString(),
     )
 
+    let extraPayablePercentageHuman: string | undefined
+    if (referendums?.length) {
+      const voteActionPoints = getVoteActionPoints(
+        stakePosition.stake,
+        referendums.length,
+      )
+
+      const extraPoints = wasm.calculate_points(
+        enteredAt,
+        currentPeriod,
+        timePointsPerPeriod.toString(),
+        timePointsWeight.toString(),
+        actionPoints.plus(voteActionPoints).toString(),
+        actionPointsWeight.toString(),
+        stakePosition.accumulatedSlashPoints.toString(),
+      )
+
+      const extraPaylablePercentage = wasm.sigmoid(extraPoints, a, b)
+
+      extraPayablePercentageHuman = scaleHuman(extraPaylablePercentage, "q")
+        .multipliedBy(100)
+        .toString()
+    }
+
     const payablePercentage = wasm.sigmoid(points, a, b)
 
-    const allocatedRewardsPercentage = BN(payablePercentage).multipliedBy(100)
+    const payablePercentageHuman = scaleHuman(
+      payablePercentage,
+      "q",
+    ).multipliedBy(100)
 
-    let rewards = BN(
-      wasm.calculate_percentage_amount(maxRewards, payablePercentage),
-    )
+    const totalRewards = BN(maxRewards)
+      .plus(stakePosition.accumulatedUnpaidRewards)
+      .plus(stakePosition.accumulatedLockedRewards)
 
-    rewards.plus(
+    const chartValues = getChartValues(
+      80,
+      timePointsPerPeriod.toString(),
+      timePointsWeight.toString(),
+      periodLength.toString(),
+    ).map((chartPoints, i, arr) => {
+      const current =
+        BN(payablePercentageHuman).gte(chartPoints.y) &&
+        (arr[i + 1] ? BN(payablePercentageHuman).lt(arr[i + 1].y) : true)
+
+      //calculate paylable percentage if vote ongoing referendas
+      const currentSecondary = extraPayablePercentageHuman
+        ? BN(extraPayablePercentageHuman).gte(chartPoints.y) &&
+          (arr[i + 1] ? BN(extraPayablePercentageHuman).lt(arr[i + 1].y) : true)
+        : undefined
+
+      return { ...chartPoints, current, currentSecondary }
+    })
+
+    if (BN(currentPeriod).minus(enteredAt).lte(unclaimablePeriods)) {
+      return { rewards: BN_0, unlockedRewards: BN_0, positionId, chartValues }
+    }
+
+    const userRewards = BN(
       wasm.calculate_percentage_amount(
-        stakePosition.accumulatedUnpaidRewards.toString(),
+        totalRewards.toString(),
         payablePercentage,
       ),
     )
 
-    const unlockedRewards = BN(
-      wasm.calculate_percentage_amount(
-        stakePosition.accumulatedLockedRewards.toString(),
-        payablePercentage,
-      ),
+    const availabeRewards = BN.max(
+      stakePosition.accumulatedLockedRewards,
+      userRewards,
     )
 
     return {
       positionId,
-      rewards: rewards.div(BN_BILL),
-      unlockedRewards: unlockedRewards.div(BN_BILL),
+      rewards: availabeRewards.div(BN_BILL),
+      maxRewards: totalRewards.div(BN_BILL),
       actionPoints,
-      allocatedRewardsPercentage,
-      maxRewards: BN(maxRewards)
-        .plus(stakePosition.accumulatedLockedRewards)
-        .div(BN_BILL),
+      payablePercentage: payablePercentageHuman,
+      chartValues,
+      allocatedRewardsPercentage: availabeRewards
+        .div(totalRewards)
+        .multipliedBy(100),
     }
-  }, [bestNumber.data, potBalance.data, stake, stakingConsts])
+  }, [bestNumber.data, potBalance.data, stake, stakingConsts, referendums])
 
   return { data, isLoading }
+}
+
+const getChartValues = (
+  periodAmount: number,
+  timePointsPerPeriod: string,
+  timePointsWeight: string,
+  periodLength: string,
+) => {
+  return Array.from({ length: periodAmount }).reduce<
+    { y: number; x: number }[]
+  >((acc, _, i) => {
+    const period = BN(i).times(10).toString()
+
+    const points = wasm.calculate_points(
+      "0",
+      period,
+      timePointsPerPeriod,
+      timePointsWeight,
+      "0",
+      "0",
+      "0",
+    )
+
+    const payablePercentage_ = wasm.sigmoid(points, a, b)
+
+    const y = scaleHuman(payablePercentage_, "q").multipliedBy(100).toNumber()
+
+    const x = BN.max(
+      BN(periodLength)
+        .times(period)
+        .times(PARACHAIN_BLOCK_TIME)
+        .div(60)
+        .div(60)
+        .div(24),
+      BN_0,
+    ).toNumber()
+
+    acc.push({
+      x,
+      y,
+    })
+
+    return acc
+  }, [])
 }

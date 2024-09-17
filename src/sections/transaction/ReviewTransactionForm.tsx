@@ -1,309 +1,334 @@
+import { TransactionResponse } from "@ethersproject/providers"
+import { FC, useState } from "react"
 import { SubmittableExtrinsic } from "@polkadot/api/types"
-import { getWalletBySource } from "@talismn/connect-wallets"
 import { useMutation } from "@tanstack/react-query"
-import { useAcountAssets } from "api/assetDetails"
-import { useTokenBalance } from "api/balances"
-import { useBestNumber } from "api/chain"
-import { useEra } from "api/era"
-import {
-  useAcceptedCurrencies,
-  useAccountCurrency,
-  useSetAsFeePayment,
-} from "api/payments"
-import { useSpotPrice } from "api/spotPrice"
-import { useNextNonce, usePaymentInfo } from "api/transaction"
-import BigNumber from "bignumber.js"
 import { Button } from "components/Button/Button"
 import { ModalScrollableContent } from "components/Modal/Modal"
-import { Spacer } from "components/Spacer/Spacer"
-import { Summary } from "components/Summary/Summary"
-import { TransactionCode } from "components/TransactionCode/TransactionCode"
 import { Text } from "components/Typography/Text/Text"
-import { Trans, useTranslation } from "react-i18next"
-import { useAssetsModal } from "sections/assets/AssetsModal.utils"
+import { useTranslation } from "react-i18next"
 import {
-  PROXY_WALLET_PROVIDER,
-  Transaction,
-  useAccountStore,
-} from "state/store"
-import { NATIVE_ASSET_ID, POLKADOT_APP_NAME } from "utils/api"
-import { getFloatingPointAmount } from "utils/balance"
-import { BN_0, BN_1 } from "utils/constants"
-import { getTransactionJSON } from "./ReviewTransaction.utils"
-import { useWalletConnect } from "components/OnboardProvider/OnboardProvider"
-import Skeleton from "react-loading-skeleton"
-import { useRpcProvider } from "providers/rpcProvider"
+  useAccount,
+  useEvmWalletReadiness,
+  useWallet,
+} from "sections/web3-connect/Web3Connect.utils"
+import { Transaction, useStore } from "state/store"
+import { theme } from "theme"
+import { ReviewTransactionData } from "./ReviewTransactionData"
+import {
+  useEditFeePaymentAsset,
+  usePolkadotJSTxUrl,
+  useTransactionValues,
+} from "./ReviewTransactionForm.utils"
+import { ReviewTransactionSummary } from "sections/transaction/ReviewTransactionSummary"
+import { HYDRADX_CHAIN_KEY } from "sections/xcm/XcmPage.utils"
+import { useReferralCodesStore } from "sections/referrals/store/useReferralCodesStore"
+import BN from "bignumber.js"
+import { H160, isEvmAccount } from "utils/evm"
+import { isSetCurrencyExtrinsic } from "sections/transaction/ReviewTransaction.utils"
+import {
+  EthereumSigner,
+  PermitResult,
+} from "sections/web3-connect/signer/EthereumSigner"
+import { chainsMap } from "@galacticcouncil/xcm-cfg"
+import { isAnyParachain } from "utils/helpers"
+import { EVM_PROVIDERS } from "sections/web3-connect/constants/providers"
+import {
+  useWeb3ConnectStore,
+  WalletMode,
+} from "sections/web3-connect/store/useWeb3ConnectStore"
 
-export const ReviewTransactionForm = (
-  props: {
-    title?: string
-    onCancel: () => void
-    onSigned: (signed: SubmittableExtrinsic<"promise">) => void
-  } & Omit<Transaction, "id">,
-) => {
+type TxProps = Omit<Transaction, "id" | "tx" | "xcall"> & {
+  tx: SubmittableExtrinsic<"promise">
+}
+
+type Props = TxProps & {
+  onCancel: () => void
+  onPermitDispatched: ({
+    permit,
+    xcallMeta,
+  }: {
+    permit: PermitResult
+    xcallMeta?: Record<string, string>
+  }) => void
+  onEvmSigned: (data: {
+    evmTx: TransactionResponse
+    tx: SubmittableExtrinsic<"promise">
+    xcallMeta?: Record<string, string>
+  }) => void
+  onSigned: (
+    signed: SubmittableExtrinsic<"promise">,
+    xcallMeta?: Record<string, string>,
+  ) => void
+  onSignError?: (error: unknown) => void
+}
+
+export const ReviewTransactionForm: FC<Props> = (props) => {
   const { t } = useTranslation()
-  const { assets } = useRpcProvider()
-  const { account } = useAccountStore()
-  const bestNumber = useBestNumber()
-  const accountCurrency = useAccountCurrency(account?.address)
-  const currencyId = [props.overrides?.currencyId, accountCurrency.data].find(
-    (currencyId) => currencyId,
-  )
-  const feeMeta = currencyId ? assets.getAsset(currencyId) : undefined
+  const { account } = useAccount()
+  const { setReferralCode } = useReferralCodesStore()
+  const { toggle: toggleWeb3Modal } = useWeb3ConnectStore()
 
-  const feeAssetBalance = useTokenBalance(
-    props.overrides?.currencyId ?? accountCurrency.data,
-    account?.address,
-  )
+  const polkadotJSUrl = usePolkadotJSTxUrl(props.tx)
 
-  const feeAssets = useAcountAssets(account?.address)
-  const setFeeAsPayment = useSetAsFeePayment()
+  const shouldOpenPolkaJSUrl =
+    polkadotJSUrl && account?.isExternalWalletConnected && !account?.delegate
 
-  const nonce = useNextNonce(account?.address)
-  const spotPrice = useSpotPrice(NATIVE_ASSET_ID, feeMeta?.id)
+  const { transactions } = useStore()
 
-  const { wallet } = useWalletConnect()
+  const isChangingFeePaymentAsset =
+    !isSetCurrencyExtrinsic(props.tx?.toHuman()) &&
+    transactions?.some(({ tx }) => isSetCurrencyExtrinsic(tx?.toHuman()))
 
-  const signTx = useMutation(async () => {
-    const address = props.isProxy ? account?.delegate : account?.address
-    const provider =
-      account?.provider === "external" && props.isProxy
-        ? PROXY_WALLET_PROVIDER
-        : account?.provider
+  const [tipAmount, setTipAmount] = useState<BN | undefined>(undefined)
+  const [customNonce, setCustomNonce] = useState<string | undefined>(undefined)
 
-    if (!address) throw new Error("Missing active account")
-
-    if (provider === "WalletConnect") {
-      if (wallet == null) throw new Error("Missing wallet for Wallet Connect")
-      const signer = wallet.signer
-      if (!signer) throw new Error("Missing signer for Wallet Connect")
-
-      const signature = await props.tx.signAsync(address, { signer, nonce: -1 })
-      return await props.onSigned(signature)
-    } else {
-      const wallet = getWalletBySource(provider)
-
-      if (wallet == null) throw new Error("Missing wallet")
-
-      if (props.isProxy) {
-        await wallet.enable(POLKADOT_APP_NAME)
-      }
-      const signature = await props.tx.signAsync(address, {
-        signer: wallet.signer,
-        // defer to polkadot/api to handle nonce w/ regard to mempool
-        nonce: -1,
-      })
-      return await props.onSigned(signature)
-    }
+  const transactionValues = useTransactionValues({
+    xcallMeta: props.xcallMeta,
+    tx: props.tx,
+    overrides: props.overrides,
   })
 
-  const json = getTransactionJSON(props.tx)
-  const { data: paymentInfoData } = usePaymentInfo(props.tx)
-  const era = useEra(
-    props.tx.era,
-    bestNumber.data?.parachainBlockNumber.toString(),
-    !signTx.isLoading && props.tx.era.isMortalEra,
-  )
-
-  const acceptedFeeAssets = useAcceptedCurrencies(
-    feeAssets.map((feeAsset) => feeAsset.asset.id) ?? [],
-  )
-  const isLoading = feeAssetBalance.isLoading
   const {
-    openModal,
-    modal,
-    isOpen: isOpenSelectAssetModal,
-  } = useAssetsModal({
-    title: t("liquidity.reviewTransaction.modal.selectAsset"),
-    hideInactiveAssets: true,
-    allowedAssets:
-      acceptedFeeAssets
-        .filter(
-          (acceptedFeeAsset) =>
-            acceptedFeeAsset.data?.accepted &&
-            acceptedFeeAsset.data?.id !== accountCurrency.data,
-        )
-        .map((acceptedFeeAsset) => acceptedFeeAsset.data?.id) ?? [],
-    onSelect: (asset) =>
-      setFeeAsPayment(asset.id.toString(), {
-        onLoading: (
-          <Trans
-            t={t}
-            i18nKey="wallet.assets.table.actions.payment.toast.onLoading"
-            tOptions={{
-              asset: asset.symbol,
-            }}
-          >
-            <span />
-            <span className="highlight" />
-          </Trans>
-        ),
-        onSuccess: (
-          <Trans
-            t={t}
-            i18nKey="wallet.assets.table.actions.payment.toast.onSuccess"
-            tOptions={{
-              asset: asset.symbol,
-            }}
-          >
-            <span />
-            <span className="highlight" />
-          </Trans>
-        ),
-        onError: (
-          <Trans
-            t={t}
-            i18nKey="wallet.assets.table.actions.payment.toast.onLoading"
-            tOptions={{
-              asset: asset.symbol,
-            }}
-          >
-            <span />
-            <span className="highlight" />
-          </Trans>
-        ),
-      }),
-  })
+    acceptedFeePaymentAssets,
+    isEnoughPaymentBalance,
+    feePaymentMeta,
+    isLinkedAccount,
+    storedReferralCode,
+    tx,
+    era,
+    shouldUsePermit,
+    permitNonce,
+    pendingPermit,
+  } = transactionValues.data
 
-  const feePaymentBalance = getFloatingPointAmount(
-    feeAssetBalance.data?.balance ?? BN_0,
-    feeMeta?.decimals ?? 12,
+  const isPermitTxPending = !!pendingPermit
+
+  const isIncompatibleWalletProvider =
+    !props.xcallMeta &&
+    account &&
+    isEvmAccount(account.address) &&
+    !EVM_PROVIDERS.includes(account.provider)
+
+  const isLinking = !isLinkedAccount && storedReferralCode
+
+  const {
+    openEditFeePaymentAssetModal,
+    editFeePaymentAssetModal,
+    isOpenEditFeePaymentAssetModal,
+  } = useEditFeePaymentAsset(acceptedFeePaymentAssets, feePaymentMeta?.id)
+
+  const { wallet } = useWallet()
+
+  const signTx = useMutation(
+    async () => {
+      try {
+        const address = props.isProxy ? account?.delegate : account?.address
+
+        if (!address) throw new Error("Missing active account")
+        if (!wallet) throw new Error("Missing wallet")
+        if (!wallet.signer) throw new Error("Missing signer")
+
+        if (wallet?.signer instanceof EthereumSigner) {
+          const txData = tx.method.toHex()
+
+          if (shouldUsePermit) {
+            const nonce = customNonce ? BN(customNonce) : permitNonce
+            const permit = await wallet.signer.getPermit(txData, nonce)
+            return props.onPermitDispatched({
+              permit,
+              xcallMeta: props.xcallMeta,
+            })
+          }
+
+          const evmTx = await wallet.signer.sendDispatch(txData)
+          return props.onEvmSigned({ evmTx, tx, xcallMeta: props.xcallMeta })
+        }
+
+        const srcChain = props?.xcallMeta?.srcChain
+          ? chainsMap.get(props.xcallMeta.srcChain)
+          : null
+
+        const isH160SrcChain =
+          !!srcChain && isAnyParachain(srcChain) && srcChain.h160AccOnly
+
+        const formattedAddress = isH160SrcChain
+          ? H160.fromAccount(address)
+          : address
+
+        const signature = await tx.signAsync(formattedAddress, {
+          era: era?.period?.toNumber(),
+          tip: tipAmount?.gte(0) ? tipAmount.toString() : undefined,
+          signer: wallet.signer,
+          // defer to polkadot/api to handle nonce w/ regard to mempool
+          nonce: customNonce ? parseInt(customNonce) : -1,
+          withSignedTransaction: true,
+        })
+
+        return props.onSigned(signature, props.xcallMeta)
+      } catch (error) {
+        props.onSignError?.(error)
+      }
+    },
+    {
+      onSuccess: () =>
+        isLinking && account && setReferralCode(undefined, account.address),
+    },
   )
-  const paymentFee = paymentInfoData
-    ? getFloatingPointAmount(
-        BigNumber(
-          props.overrides?.fee ?? paymentInfoData.partialFee.toHex(),
-        ).multipliedBy(spotPrice.data?.spotPrice ?? BN_1),
-        12,
-      )
-    : null
 
-  const hasFeePaymentBalance =
-    paymentFee && feePaymentBalance.minus(paymentFee).gt(0)
+  const { data: evmWalletReady } = useEvmWalletReadiness()
+  const isWalletReady =
+    wallet?.signer instanceof EthereumSigner ? evmWalletReady : true
 
-  if (isOpenSelectAssetModal) return modal
+  const isLoading =
+    transactionValues.isLoading || signTx.isLoading || isChangingFeePaymentAsset
+  const hasMultipleFeeAssets =
+    props.xcallMeta && props.xcallMeta?.srcChain !== HYDRADX_CHAIN_KEY
+      ? false
+      : acceptedFeePaymentAssets.length > 1
+  const isEditPaymentBalance = !isEnoughPaymentBalance && hasMultipleFeeAssets
+
+  if (isOpenEditFeePaymentAssetModal) return editFeePaymentAssetModal
+
+  const onConfirmClick = () =>
+    shouldOpenPolkaJSUrl
+      ? window.open(polkadotJSUrl, "_blank")
+      : isEnoughPaymentBalance
+        ? signTx.mutate()
+        : hasMultipleFeeAssets
+          ? openEditFeePaymentAssetModal()
+          : undefined
 
   let btnText = t("liquidity.reviewTransaction.modal.confirmButton")
 
-  if (!isLoading) {
-    if (hasFeePaymentBalance === false) {
-      btnText = t(
-        "liquidity.reviewTransaction.modal.confirmButton.notEnoughBalance",
-      )
-    }
-
-    if (signTx.isLoading) {
-      btnText = t("liquidity.reviewTransaction.modal.confirmButton.loading")
-    }
+  if (shouldOpenPolkaJSUrl) {
+    btnText = t(
+      "liquidity.reviewTransaction.modal.confirmButton.openPolkadotJS",
+    )
+  } else if (isEditPaymentBalance) {
+    btnText = t(
+      "liquidity.reviewTransaction.modal.confirmButton.notEnoughBalance",
+    )
+  } else if (signTx.isLoading) {
+    btnText = t("liquidity.reviewTransaction.modal.confirmButton.loading")
   }
 
+  const isEvm = isEvmAccount(account?.address)
+
+  const isTippingEnabled = props.xcallMeta
+    ? props.xcallMeta?.srcChain === "hydradx" && !isEvm
+    : !isEvm
+
+  const isCustomNonceEnabled = isEvm ? shouldUsePermit : true
+
   return (
-    <ModalScrollableContent
-      content={
-        <>
-          {props.title && (
-            <Text color="basic400" fw={400} sx={{ mt: 6 }}>
-              {props.title}
-            </Text>
-          )}
-          <Text fs={16} fw={400} color="basic400">
-            {t("liquidity.reviewTransaction.modal.desc")}
-          </Text>
-          <div sx={{ mt: 16 }}>
-            {json && <TransactionCode name={json.method} src={json.args} />}
-          </div>
-        </>
-      }
-      footer={
-        <>
-          <div>
-            <Spacer size={15} />
-            <Summary
-              rows={[
-                {
-                  label: t("liquidity.reviewTransaction.modal.detail.cost"),
-                  content: paymentInfoData ? (
-                    <div sx={{ flex: "row", gap: 6, align: "center" }}>
-                      <Text>
-                        {t("liquidity.add.modal.row.transactionCostValue", {
-                          amount: (
-                            props.overrides?.fee ??
-                            new BigNumber(paymentInfoData.partialFee.toHex())
-                          ).multipliedBy(spotPrice.data?.spotPrice ?? BN_1),
-                          symbol: feeMeta?.symbol,
-                          fixedPointScale: 12,
-                          type: "token",
-                        })}
-                      </Text>
-                      <div
-                        tabIndex={0}
-                        role="button"
-                        onClick={openModal}
-                        css={{ cursor: "pointer" }}
-                      >
-                        <Text color="brightBlue300">
-                          {t("liquidity.reviewTransaction.modal.edit")}
-                        </Text>
-                      </div>
-                    </div>
-                  ) : (
-                    <Skeleton width={100} height={16} />
-                  ),
-                },
-                {
-                  label: t("liquidity.reviewTransaction.modal.detail.lifetime"),
-                  content: props.tx.era.isMortalEra
-                    ? t("transaction.mortal.expire", {
-                        date: era?.deathDate,
-                      })
-                    : t("transaction.immortal.expire"),
-                },
-                {
-                  label: t("liquidity.reviewTransaction.modal.detail.nonce"),
-                  content: nonce.data?.toString(),
-                },
-              ]}
-            />
-          </div>
-          <div
-            sx={{
-              mt: 24,
-              flex: "row",
-              justify: "space-between",
-              align: "start",
-            }}
-          >
-            <Button
-              onClick={props.onCancel}
-              text={t("liquidity.reviewTransaction.modal.cancel")}
-              variant="secondary"
-            />
-            <div sx={{ flex: "column", justify: "center", gap: 4 }}>
-              <Button
-                text={btnText}
-                variant="primary"
-                isLoading={signTx.isLoading || isLoading}
-                disabled={account == null || isLoading || signTx.isLoading}
-                onClick={() =>
-                  hasFeePaymentBalance ? signTx.mutate() : openModal()
+    <>
+      <ModalScrollableContent
+        sx={{
+          mx: "calc(-1 * var(--modal-content-padding))",
+          p: "var(--modal-content-padding)",
+          maxHeight: 280,
+        }}
+        css={{ backgroundColor: `rgba(${theme.rgbColors.alpha0}, .06)` }}
+        content={
+          <ReviewTransactionData
+            address={account?.address}
+            tx={tx}
+            xcallMeta={props.xcallMeta}
+          />
+        }
+        footer={
+          <>
+            <div sx={{ mt: 15 }}>
+              <ReviewTransactionSummary
+                tx={props.tx}
+                transactionValues={transactionValues}
+                editFeePaymentAssetEnabled={hasMultipleFeeAssets}
+                xcallMeta={props.xcallMeta}
+                openEditFeePaymentAssetModal={openEditFeePaymentAssetModal}
+                onTipChange={isTippingEnabled ? setTipAmount : undefined}
+                onNonceChange={
+                  isCustomNonceEnabled ? setCustomNonce : undefined
                 }
+                referralCode={isLinking ? storedReferralCode : undefined}
               />
-              {hasFeePaymentBalance === false && (
-                <Text fs={16} color="pink600">
-                  {t(
-                    "liquidity.reviewTransaction.modal.confirmButton.notEnoughBalance.msg",
-                  )}
-                </Text>
-              )}
-              {signTx.isLoading && (
-                <Text fs={12} lh={16} tAlign="center" color="warning300">
-                  {t("liquidity.reviewTransaction.modal.confirmButton.warning")}
-                </Text>
-              )}
             </div>
-          </div>
-        </>
-      }
-    />
+            <div
+              sx={{
+                mt: ["auto", 24],
+                flex: "row",
+                justify: "space-between",
+                align: "start",
+              }}
+            >
+              <Button
+                onClick={props.onCancel}
+                text={t("liquidity.reviewTransaction.modal.cancel")}
+              />
+              <div sx={{ flex: "column", justify: "center", gap: 4 }}>
+                {isIncompatibleWalletProvider ? (
+                  <Button
+                    variant="primary"
+                    onClick={() => toggleWeb3Modal(WalletMode.SubstrateEVM)}
+                  >
+                    {t(`header.walletConnect.switch.button`)}
+                  </Button>
+                ) : (
+                  <Button
+                    text={btnText}
+                    variant="primary"
+                    isLoading={isPermitTxPending || isLoading}
+                    disabled={
+                      isPermitTxPending ||
+                      !isWalletReady ||
+                      !account ||
+                      isLoading ||
+                      (!isEnoughPaymentBalance && !hasMultipleFeeAssets)
+                    }
+                    onClick={onConfirmClick}
+                  />
+                )}
+
+                {isIncompatibleWalletProvider && (
+                  <Text fs={12} lh={16} tAlign="center" color="pink600">
+                    {t(
+                      "liquidity.reviewTransaction.modal.confirmButton.invalidWalletProvider.msg",
+                    )}
+                  </Text>
+                )}
+
+                {!isEnoughPaymentBalance && !transactionValues.isLoading && (
+                  <Text fs={12} lh={16} tAlign="center" color="pink600">
+                    {t(
+                      "liquidity.reviewTransaction.modal.confirmButton.notEnoughBalance.msg",
+                    )}
+                  </Text>
+                )}
+                {signTx.isLoading && (
+                  <Text fs={12} lh={16} tAlign="center" color="warning300">
+                    {t(
+                      "liquidity.reviewTransaction.modal.confirmButton.warning",
+                    )}
+                  </Text>
+                )}
+                {!isWalletReady && (
+                  <Text fs={12} lh={16} tAlign="center" color="warning300">
+                    {t(
+                      "liquidity.reviewTransaction.modal.walletNotReady.warning",
+                    )}
+                  </Text>
+                )}
+                {isPermitTxPending && (
+                  <Text fs={12} lh={16} tAlign="center" color="warning300">
+                    {t(
+                      "liquidity.reviewTransaction.modal.confirmButton.pendingPermit.msg",
+                    )}
+                  </Text>
+                )}
+              </div>
+            </div>
+          </>
+        }
+      />
+    </>
   )
 }

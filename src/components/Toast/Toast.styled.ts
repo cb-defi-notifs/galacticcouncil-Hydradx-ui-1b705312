@@ -1,7 +1,7 @@
 import { Close, Root, Title } from "@radix-ui/react-toast"
 import styled from "@emotion/styled"
 import { theme } from "theme"
-import { motion } from "framer-motion"
+import { m as motion } from "framer-motion"
 import { Maybe } from "utils/helpers"
 import { css, SerializedStyles } from "@emotion/react"
 import { ToastVariant } from "state/toasts"
@@ -36,23 +36,17 @@ export const SIcon = styled.div`
   align-items: center;
   justify-content: center;
 
-  svg {
+  & > svg {
     width: 16px;
     height: 16px;
   }
 `
 
-export const SLink = styled.div<{ variant: ToastVariant }>`
+export const SLink = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${({ variant }) => {
-    if (variant === "progress") {
-      return theme.colors.white
-    }
-
-    return `rgba(${theme.rgbColors.white}, 0.6)`
-  }};
+  color: rgba(${theme.rgbColors.white}, 0.6);
 
   svg {
     width: 16px;
@@ -67,6 +61,13 @@ export const STitle = styled(Title)`
   font-size: 12px;
   color: ${theme.colors.basic400};
   & .highlight {
+    color: ${theme.colors.white};
+  }
+  & .referralTitle {
+    color: ${theme.colors.white};
+    font-family: "GeistMono";
+  }
+  & .referralDesc {
     color: ${theme.colors.white};
   }
 `
@@ -142,6 +143,14 @@ const variantBg: Record<ToastVariant, SerializedStyles> = {
   unknown: css`
     background: rgba(${theme.rgbColors.primaryA15Blue}, 0.35);
   `,
+  temporary: css`
+    background: linear-gradient(
+        0deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0) 100%
+      ),
+      rgba(246, 41, 124, 0.4);
+  `,
 }
 
 export const Shadow = styled.div<{ variant: ToastVariant }>`
@@ -166,6 +175,7 @@ const variantProgressBarBg: Record<ToastVariant, string> = {
   error: theme.colors.red700,
   progress: theme.colors.brightBlue700,
   unknown: theme.colors.brightBlue700,
+  temporary: theme.colors.pink600,
 }
 
 export const ToastContentWrapper = styled.div`

@@ -1,9 +1,9 @@
+import { useAssets } from "providers/assets"
 import BigNumber from "bignumber.js"
-import { AssetLogo } from "components/AssetIcon/AssetIcon"
+import { MultipleAssetLogo } from "components/AssetIcon/AssetIcon"
 import { DisplayValue } from "components/DisplayValue/DisplayValue"
-import { Icon } from "components/Icon/Icon"
 import { Text } from "components/Typography/Text/Text"
-import { motion } from "framer-motion"
+import { m as motion } from "framer-motion"
 import { useTranslation } from "react-i18next"
 
 type SliceLabelProps = {
@@ -21,6 +21,10 @@ export const SliceLabel = ({
 }: SliceLabelProps) => {
   const { t } = useTranslation()
 
+  const { getAsset } = useAssets()
+
+  const meta = getAsset(id)
+
   return (
     <motion.div
       sx={{ flex: "column", align: "center", gap: 6 }}
@@ -28,7 +32,7 @@ export const SliceLabel = ({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <Icon size={[20, 36]} icon={<AssetLogo id={id} />} />
+      <MultipleAssetLogo size={[20, 36]} iconId={meta?.iconId} />
       <Text color="basic100" fs={[20, 34]}>
         {t("value.percentage", { value: percentage })}
       </Text>

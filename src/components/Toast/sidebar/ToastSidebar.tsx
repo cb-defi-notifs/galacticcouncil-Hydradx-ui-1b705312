@@ -55,7 +55,7 @@ export function ToastSidebar() {
                     {t("toast.sidebar.title")}
                   </Heading>
                   <SCloseButton
-                    name={t("toast.close")}
+                    name={t("close")}
                     icon={<CrossIcon />}
                     onClick={onClose}
                   />
@@ -81,6 +81,7 @@ export function ToastSidebar() {
                             {pendingToasts.map((toast) => (
                               <ToastContent
                                 key={toast.id}
+                                link={toast.link}
                                 variant={toast.variant}
                                 title={
                                   <div

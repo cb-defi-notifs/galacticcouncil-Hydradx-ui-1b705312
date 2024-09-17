@@ -17,7 +17,7 @@ import { BondsTrade } from "./components/BondTrade/BondsTradeApp"
 import { addSeconds } from "date-fns"
 import { theme } from "theme"
 import { AssetLogo } from "components/AssetIcon/AssetIcon"
-import { useRpcProvider } from "providers/rpcProvider"
+import { useAssets } from "providers/assets"
 
 type SearchGenerics = MakeGenerics<{
   Search: { assetOut: number; assetIn: number }
@@ -25,7 +25,15 @@ type SearchGenerics = MakeGenerics<{
 
 export const BondsDetailsHeaderSkeleton = () => {
   return (
-    <div sx={{ flex: "row", justify: "space-between", align: "center" }}>
+    <div
+      sx={{
+        flex: ["column", "row"],
+        justify: "space-between",
+        align: "center",
+        gap: [20, 0],
+        mt: ["-55px", 0],
+      }}
+    >
       <Skeleton width={200} height={26} />
       <div sx={{ flex: "row", align: "center", gap: 4 }}>
         <Icon sx={{ color: "brightBlue300" }} icon={<ClockIcon />} />
@@ -46,14 +54,15 @@ export const BondDetailsHeader = ({
   accumulatedAssetId?: number
 }) => {
   const { t } = useTranslation()
-  const { assets } = useRpcProvider()
+  const { getAsset } = useAssets()
 
   const bestNumber = useBestNumber()
-  const accumulatedAssetMeta = assets.getAsset(String(accumulatedAssetId))
+  const accumulatedAssetMeta = getAsset(String(accumulatedAssetId))
 
   const isLoading = bestNumber.isLoading
 
-  if (isLoading || !bestNumber.data) return <BondsDetailsHeaderSkeleton />
+  if (isLoading || !bestNumber.data || !accumulatedAssetMeta)
+    return <BondsDetailsHeaderSkeleton />
 
   let endingDuration
   let date
@@ -81,7 +90,7 @@ export const BondDetailsHeader = ({
       }}
     >
       <div sx={{ flex: "column", align: ["center", "flex-start"] }}>
-        <Text fs={[15, 24]} color="white" font="FontOver">
+        <Text fs={[15, 24]} color="white" font="GeistMono">
           {title}
         </Text>
         {accumulatedAssetId && (
@@ -106,14 +115,14 @@ export const BondDetailsHeader = ({
       <div sx={{ flex: "row", align: "center", gap: 4 }}>
         <Icon sx={{ color: "brightBlue300" }} icon={<ClockIcon />} />
         {endingDuration ? (
-          <Text fs={20} color="white" font="ChakraPetchSemiBold">
+          <Text fs={20} color="white" font="GeistSemiBold">
             <Trans
               t={t}
               i18nKey={`bonds.details.header.${isPast ? "endPast" : "end"}`}
               tOptions={{
                 date:
                   isPast && date
-                    ? formatDate(date, "dd.MM.yyyy HH:mm")
+                    ? formatDate(date, "dd/MM/yyyy HH:mm")
                     : endingDuration.duration,
               }}
             >
@@ -129,13 +138,14 @@ export const BondDetailsHeader = ({
 }
 
 export const BondDetailsData = () => {
-  const { assets } = useRpcProvider()
+  const { getBond, getAsset } = useAssets()
   const search = useSearch<SearchGenerics>()
+  const bestNumber = useBestNumber()
 
   const [bondId, setBondId] = useState(() => {
     const assetOutId = search.assetOut?.toString()
     const assetInId = search.assetIn?.toString()
-    const isBond = assetOutId ? assets.getAsset(assetOutId).isBond : undefined
+    const isBond = assetOutId ? getAsset(assetOutId)?.isBond : undefined
 
     if (isBond) {
       return assetOutId
@@ -144,14 +154,22 @@ export const BondDetailsData = () => {
     }
   })
 
-  const bond = bondId ? assets.getBond(bondId) : undefined
+  const bond = bondId ? getBond(bondId) : undefined
 
-  const isPast = !!bond?.isPast
-  const lbpPoolEvents = useLBPPoolEvents(isPast ? bond?.id : undefined)
   const lbpPool = useLbpPool({ id: bond?.id })
+  const poolData = lbpPool.data?.[0]
+
+  let isPast: boolean | undefined = lbpPool.isLoading ? undefined : !poolData
+
+  if (poolData && bestNumber.data) {
+    isPast =
+      bestNumber.data?.relaychainBlockNumber.toNumber() > (poolData.end ?? 0)
+  }
+
+  const lbpPoolEvents = useLBPPoolEvents(isPast === true ? bond?.id : undefined)
 
   const lbpPoolData = useMemo(() => {
-    if (lbpPool.data && !isPast)
+    if (lbpPool.data)
       return {
         data: lbpPool.data[0],
         poolId: undefined,
@@ -175,9 +193,9 @@ export const BondDetailsData = () => {
     }
 
     return undefined
-  }, [isPast, lbpPool.data, lbpPoolEvents.data?.events])
+  }, [lbpPool.data, lbpPoolEvents.data?.events])
 
-  if (!bond) return <BondDetailsSkeleton />
+  if (!bond || lbpPool.isLoading) return <BondDetailsSkeleton />
 
   return (
     <div sx={{ flex: "column", gap: [20, 40] }}>
@@ -195,11 +213,13 @@ export const BondDetailsData = () => {
 
       <BondInfoCards
         bond={bond}
+        lbpPool={lbpPoolData?.data}
         poolId={lbpPoolData?.poolId}
         removeBlock={lbpPoolData?.removeBlock}
+        isPast={isPast}
       />
 
-      <MyActiveBonds assetId={bond.assetId} />
+      <MyActiveBonds id={bond.id} showTransactions />
     </div>
   )
 }

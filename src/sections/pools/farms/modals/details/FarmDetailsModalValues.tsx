@@ -1,42 +1,42 @@
-import { DepositNftType } from "api/deposits"
 import BigNumber from "bignumber.js"
 import { useTranslation } from "react-i18next"
 import { useEnteredDate } from "utils/block"
 import { useClaimableAmount } from "utils/farms/claiming"
-import { useDepositShare } from "sections/pools/farms/position/FarmingPosition.utils"
-import { WalletAssetsHydraPositionsData } from "sections/wallet/assets/hydraPositions/data/WalletAssetsHydraPositionsData"
+import {
+  isXYKDeposit,
+  TDepositData,
+} from "sections/pools/farms/position/FarmingPosition.utils"
 import { Summary } from "components/Summary/Summary"
-import { useRpcProvider } from "providers/rpcProvider"
-import { u32 } from "@polkadot/types-codec"
+import { useAssets } from "providers/assets"
+import { usePoolData } from "sections/pools/pool/Pool"
+import { TDeposit } from "api/deposits"
 
 type FarmDetailsModalValuesProps = {
-  poolId: u32
-  depositNft: DepositNftType
+  depositNft: TDeposit
+  depositData: TDepositData
   enteredBlock: BigNumber
   yieldFarmId: string
 }
 
 export const FarmDetailsModalValues = ({
-  poolId,
   depositNft,
+  depositData,
   enteredBlock,
   yieldFarmId,
 }: FarmDetailsModalValuesProps) => {
   const { t } = useTranslation()
-  const { assets } = useRpcProvider()
-  const claimable = useClaimableAmount(poolId, depositNft)
+  const { pool } = usePoolData()
+  const { getAssetWithFallback } = useAssets()
+  const claimable = useClaimableAmount(pool.id, depositNft)
+
   const depositReward = claimable.data?.depositRewards.find(
     (reward) => reward.yieldFarmId === yieldFarmId,
   )
 
   const meta = depositReward?.assetId
-    ? assets.getAsset(depositReward.assetId)
+    ? getAssetWithFallback(depositReward.assetId)
     : undefined
   const entered = useEnteredDate(enteredBlock)
-
-  const position = useDepositShare(poolId, depositNft.id.toString())
-
-  if (!position.data) return null
 
   return (
     <div sx={{ pt: 22 }}>
@@ -50,14 +50,21 @@ export const FarmDetailsModalValues = ({
           },
           {
             label: t("farms.modal.details.value.label"),
-            content: (
-              <WalletAssetsHydraPositionsData
-                fontSize={14}
-                symbol={position.data.symbol}
-                value={position.data.value}
-                lrna={position.data.lrna}
-              />
-            ),
+            content: isXYKDeposit(depositData)
+              ? [
+                  t("value.tokenWithSymbol", {
+                    value: depositData.assetA.amount,
+                    symbol: depositData.assetA.symbol,
+                  }),
+                  t("value.tokenWithSymbol", {
+                    value: depositData.assetA.amount,
+                    symbol: depositData.assetA.symbol,
+                  }),
+                ].join(" | ")
+              : t("value.tokenWithSymbol", {
+                  value: depositData.totalValueShifted,
+                  symbol: depositData.meta.symbol,
+                }),
           },
           {
             label: t("farms.modal.details.mined.label"),

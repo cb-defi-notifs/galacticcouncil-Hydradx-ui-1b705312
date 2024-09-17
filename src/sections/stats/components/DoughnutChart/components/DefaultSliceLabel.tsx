@@ -2,16 +2,27 @@ import { AssetLogo } from "components/AssetIcon/AssetIcon"
 import { MultipleIcons } from "components/MultipleIcons/MultipleIcons"
 import { Text } from "components/Typography/Text/Text"
 import { useTranslation } from "react-i18next"
-import { motion } from "framer-motion"
+import { m as motion } from "framer-motion"
 import { TSlice } from "sections/stats/components/DoughnutChart/DoughnutChart"
 import { useMedia } from "react-use"
 import { theme } from "theme"
+import { useAssets } from "providers/assets"
 
-export const DefaultSliceLabel = ({ slices }: { slices: TSlice[] }) => {
+export const DefaultSliceLabel = ({
+  slices,
+  property,
+}: {
+  slices: TSlice[]
+  property?: string
+}) => {
   const isDesktop = useMedia(theme.viewport.gte.sm)
   const { t } = useTranslation()
+  const { getAsset } = useAssets()
 
-  const sortedSlices = [...slices].sort((a, b) => b.percentage - a.percentage)
+  const sortedSlices = [...slices]
+    .filter((slice) => getAsset(slice.id)?.type !== "StableSwap")
+    .sort((a, b) => b.percentage - a.percentage)
+    .slice(0, 3)
 
   return (
     <motion.div
@@ -24,14 +35,14 @@ export const DefaultSliceLabel = ({ slices }: { slices: TSlice[] }) => {
       <div sx={{ flex: "column", align: "center", gap: 6 }}>
         <MultipleIcons
           size={[20, 36]}
-          icons={[
-            { icon: <AssetLogo id={sortedSlices[0]?.id} /> },
-            { icon: <AssetLogo id={sortedSlices[1]?.id} /> },
-            { icon: <AssetLogo id={sortedSlices[2]?.id} /> },
-          ]}
+          icons={sortedSlices.map((slice) => ({
+            icon: <AssetLogo key={slice.id} id={slice.id} />,
+          }))}
         />
         <Text color="basic100" fs={[12, 18]}>
-          {t("stats.overview.pie.defaultLabel.composition")}
+          {property === "pol"
+            ? t("stats.overview.pie.defaultLabel.composition.treasury")
+            : t("stats.overview.pie.defaultLabel.composition")}
         </Text>
         <Text color="basic100" fs={[10, 12]}>
           {t("stats.overview.pie.defaultLabel.assetAvailable", {

@@ -5,26 +5,30 @@ import { Icon } from "components/Icon/Icon"
 import { TableHeader } from "components/Table/Table.styled"
 import { ReactNode } from "react"
 
-export const TableAction = (props: {
-  icon?: ReactNode
-  onClick?: () => void
-  children: ReactNode
-  disabled?: boolean
+type TableActionProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant
   isLoading?: boolean
-}) => {
+  icon?: ReactNode
+  onClick?: () => void
+  className?: string
+}
+
+export const TableAction = (props: TableActionProps) => {
   return (
     <Button
+      {...props}
       isLoading={props.isLoading}
       disabled={props.disabled}
-      size="small"
+      size="compact"
       variant={props.variant}
-      sx={{ p: "9px 12px" }}
-      css={{ whiteSpace: "nowrap" }}
       onClick={(e) => {
         e.stopPropagation()
         e.preventDefault()
         props.onClick?.()
+      }}
+      css={{
+        padding: "10px 12px",
+        whiteSpace: "nowrap",
       }}
     >
       {props.icon && <Icon size={16} icon={props.icon} />}
@@ -57,7 +61,7 @@ export const TableSortHeader = (props: {
         },
       }}
     >
-      <div sx={{ flex: "row", align: "center", gap: 6, justify: "center" }}>
+      <div sx={{ flex: "row", align: "center", gap: 6, justify: "start" }}>
         {children}
         {isSorting && (
           <div sx={{ flex: "column", gap: 2 }}>

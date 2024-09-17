@@ -1,26 +1,28 @@
-import { ComponentProps, useState } from "react"
+import { useState } from "react"
 import { RemoveLiquidityModal } from "./RemoveLiquidityModal"
 import { useTranslation } from "react-i18next"
-import { useAccountStore } from "state/store"
-import { SButton } from "sections/pools/pool/positions/LiquidityPosition.styled"
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
 import { Icon } from "components/Icon/Icon"
 import MinusIcon from "assets/icons/MinusIcon.svg?react"
+import { TPoolFullData } from "sections/pools/PoolsPage.utils"
+import { Button } from "components/Button/Button"
 
-type Props = Pick<
-  ComponentProps<typeof RemoveLiquidityModal>,
-  "assets" | "onSuccess" | "position"
->
+type Props = {
+  pool: TPoolFullData
+  onSuccess: () => void
+}
 
-export const RemoveLiquidityButton = (props: Props) => {
+export const RemoveLiquidityButton = ({ pool, onSuccess }: Props) => {
   const { t } = useTranslation()
-  const { account } = useAccountStore()
+  const { account } = useAccount()
   const [openRemove, setOpenRemove] = useState(false)
 
   return (
     <>
-      <SButton
-        variant="secondary"
+      <Button
+        variant="error"
         size="small"
+        fullWidth
         onClick={() => setOpenRemove(true)}
         disabled={account?.isExternalWalletConnected}
       >
@@ -28,10 +30,11 @@ export const RemoveLiquidityButton = (props: Props) => {
           <Icon icon={<MinusIcon />} sx={{ mr: 8 }} />
           {t("liquidity.asset.actions.removeLiquidity")}
         </div>
-      </SButton>
+      </Button>
       {openRemove && (
         <RemoveLiquidityModal
-          {...props}
+          pool={pool}
+          onSuccess={onSuccess}
           isOpen={openRemove}
           onClose={() => setOpenRemove(false)}
         />

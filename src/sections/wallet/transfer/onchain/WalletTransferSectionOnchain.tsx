@@ -1,22 +1,23 @@
 import { useAccountCurrency } from "api/payments"
 import { useSpotPrice } from "api/spotPrice"
-import { usePaymentInfo } from "api/transaction"
 import CrossIcon from "assets/icons/CrossIcon.svg?react"
 import BigNumber from "bignumber.js"
 import { Alert } from "components/Alert/Alert"
 import { Button } from "components/Button/Button"
 import { Separator } from "components/Separator/Separator"
-import { Spacer } from "components/Spacer/Spacer"
 import { SummaryRow } from "components/Summary/SummaryRow"
 import { Controller, UseFormReturn } from "react-hook-form"
 import { Trans, useTranslation } from "react-i18next"
 import { useMedia } from "react-use"
 import { WalletTransferAccountInput } from "sections/wallet/transfer/WalletTransferAccountInput"
 import { WalletTransferAssetSelect } from "sections/wallet/transfer/WalletTransferAssetSelect"
-import { useAccountStore, useStore } from "state/store"
+import { useStore } from "state/store"
 import { theme } from "theme"
-import { BN_1, BN_10 } from "utils/constants"
-import { safeConvertAddressSS58, shortenAccountAddress } from "utils/formatting"
+import { BN_0, BN_1, BN_10 } from "utils/constants"
+import {
+  getChainSpecificAddress,
+  shortenAccountAddress,
+} from "utils/formatting"
 import { FormValues } from "utils/helpers"
 import { useRpcProvider } from "providers/rpcProvider"
 import {
@@ -24,6 +25,13 @@ import {
   PasteAddressIcon,
 } from "./WalletTransferSectionOnchain.styled"
 import { useTokenBalance } from "api/balances"
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
+import { H160, safeConvertAddressH160 } from "utils/evm"
+import { useDebouncedValue } from "hooks/useDebouncedValue"
+import { usePaymentFees } from "./WalletTransferSectionOnchain.utils"
+import { useInsufficientFee } from "api/consts"
+import { Text } from "components/Typography/Text/Text"
+import { useAssets } from "providers/assets"
 
 export function WalletTransferSectionOnchain({
   asset,
@@ -31,53 +39,98 @@ export function WalletTransferSectionOnchain({
   onClose,
   openAssets,
   openAddressBook,
+  staticAsset,
 }: {
   asset: string
   form: UseFormReturn<{ dest: string; amount: string }>
   onClose: () => void
-  openAssets: () => void
+  openAssets?: () => void
   openAddressBook: () => void
+  staticAsset: boolean
 }) {
   const { t } = useTranslation()
-  const { account } = useAccountStore()
-  const { api, assets } = useRpcProvider()
+  const { account } = useAccount()
+  const { native, getAssetWithFallback } = useAssets()
+  const { api } = useRpcProvider()
   const { createTransaction } = useStore()
 
   const isDesktop = useMedia(theme.viewport.gte.sm)
 
-  const balance = useTokenBalance(asset, account?.address)
-  const assetMeta = assets.getAsset(asset.toString())
+  const tokenBalance = useTokenBalance(asset, account?.address)
+  const assetMeta = getAssetWithFallback(asset.toString())
 
   const accountCurrency = useAccountCurrency(account?.address)
   const accountCurrencyMeta = accountCurrency.data
-    ? assets.getAsset(accountCurrency.data)
+    ? getAssetWithFallback(accountCurrency.data)
     : undefined
 
-  const spotPrice = useSpotPrice(assets.native.id, accountCurrencyMeta?.id)
+  const spotPrice = useSpotPrice(native.id, accountCurrencyMeta?.id)
 
-  const { data: paymentInfoData } = usePaymentInfo(
-    asset.toString() === assets.native.id
-      ? api.tx.balances.transferKeepAlive("", "0")
-      : api.tx.tokens.transferKeepAlive("", asset, "0"),
+  const isTransferingPaymentAsset = accountCurrency.data === asset.toString()
+
+  const balance = tokenBalance.data?.balance ?? BN_0
+
+  const [debouncedAmount] = useDebouncedValue(form.watch("amount"), 500)
+
+  const amount = new BigNumber(debouncedAmount)
+    .multipliedBy(BN_10.pow(assetMeta.decimals))
+    .decimalPlaces(0)
+
+  const { currentFee, maxFee } = usePaymentFees({
+    asset,
+    currentAmount: amount,
+    maxAmount: balance,
+  })
+
+  const insufficientFee = useInsufficientFee(asset, form.watch("dest"))
+
+  const nativeDecimals = native.decimals
+  const nativeDecimalsDiff =
+    nativeDecimals - (accountCurrencyMeta?.decimals ?? nativeDecimals)
+
+  const convertedFee = currentFee.multipliedBy(
+    spotPrice.data?.spotPrice ?? BN_1,
   )
+
+  const convertedMaxFee = maxFee.multipliedBy(spotPrice.data?.spotPrice ?? BN_1)
+
+  const balanceMaxAdjusted = balance
+    .minus(convertedMaxFee.div(BN_10.pow(nativeDecimalsDiff)))
+    .decimalPlaces(0)
+
+  const balanceMax = isTransferingPaymentAsset
+    ? BigNumber.max(BN_0, balanceMaxAdjusted)
+    : balance
 
   const onSubmit = async (values: FormValues<typeof form>) => {
     if (assetMeta.decimals == null) throw new Error("Missing asset meta")
 
-    const amount = new BigNumber(values.amount).multipliedBy(
-      BN_10.pow(assetMeta.decimals),
-    )
+    const amount = new BigNumber(values.amount)
+      .multipliedBy(BN_10.pow(assetMeta.decimals))
+      .decimalPlaces(0)
+
+    const normalizedDest =
+      safeConvertAddressH160(values.dest) !== null
+        ? new H160(values.dest).toAccount()
+        : values.dest
 
     return await createTransaction(
       {
         tx:
-          asset.toString() === assets.native.id
-            ? api.tx.balances.transferKeepAlive(values.dest, amount.toFixed())
-            : api.tx.tokens.transferKeepAlive(
-                values.dest,
-                asset,
+          asset.toString() === native.id
+            ? api.tx.currencies.transfer(
+                normalizedDest,
+                native.id,
                 amount.toFixed(),
-              ),
+              )
+            : api.tx.tokens.transfer(normalizedDest, asset, amount.toFixed()),
+        overrides: insufficientFee
+          ? {
+              fee: currentFee,
+              feeExtra: insufficientFee.value,
+              currencyId: accountCurrencyMeta?.id,
+            }
+          : undefined,
       },
       {
         onClose,
@@ -90,7 +143,10 @@ export function WalletTransferSectionOnchain({
               tOptions={{
                 value: values.amount,
                 symbol: assetMeta.symbol,
-                address: shortenAccountAddress(values.dest, 12),
+                address: shortenAccountAddress(
+                  getChainSpecificAddress(normalizedDest),
+                  12,
+                ),
               }}
             >
               <span />
@@ -104,7 +160,10 @@ export function WalletTransferSectionOnchain({
               tOptions={{
                 value: values.amount,
                 symbol: assetMeta.symbol,
-                address: shortenAccountAddress(values.dest, 12),
+                address: shortenAccountAddress(
+                  getChainSpecificAddress(normalizedDest),
+                  12,
+                ),
               }}
             >
               <span />
@@ -118,7 +177,10 @@ export function WalletTransferSectionOnchain({
               tOptions={{
                 value: values.amount,
                 symbol: assetMeta.symbol,
-                address: shortenAccountAddress(values.dest, 12),
+                address: shortenAccountAddress(
+                  getChainSpecificAddress(normalizedDest),
+                  12,
+                ),
               }}
             >
               <span />
@@ -130,6 +192,16 @@ export function WalletTransferSectionOnchain({
     )
   }
 
+  const basicFeeComp = (
+    <Text fs={14} color="white" tAlign="right">
+      {t("value.tokenWithSymbol", {
+        value: convertedFee,
+        symbol: accountCurrencyMeta?.symbol,
+        fixedPointScale: 12,
+      })}
+    </Text>
+  )
+
   return (
     <form
       onSubmit={form.handleSubmit(onSubmit)}
@@ -140,30 +212,10 @@ export function WalletTransferSectionOnchain({
         minHeight: "100%",
       }}
     >
-      <div sx={{ flex: "column" }}>
+      <div sx={{ flex: "column", gap: 12 }}>
         <Controller
           name="dest"
           control={form.control}
-          rules={{
-            required: t("wallet.assets.transfer.error.required"),
-            validate: {
-              validAddress: (value) =>
-                safeConvertAddressSS58(value, 0) != null ||
-                t("wallet.assets.transfer.error.validAddress"),
-              notSame: (value) => {
-                if (!account?.address) return true
-                const from = safeConvertAddressSS58(
-                  account.address.toString(),
-                  0,
-                )
-                const to = safeConvertAddressSS58(value, 0)
-                if (from != null && to != null && from === to) {
-                  return t("wallet.assets.transfer.error.notSame")
-                }
-                return true
-              },
-            },
-          }}
           render={({
             field: { name, onChange, value, onBlur },
             fieldState: { error },
@@ -202,34 +254,6 @@ export function WalletTransferSectionOnchain({
         <Controller
           name="amount"
           control={form.control}
-          rules={{
-            required: t("wallet.assets.transfer.error.required"),
-            validate: {
-              validNumber: (value) => {
-                try {
-                  if (!new BigNumber(value).isNaN()) return true
-                } catch {}
-                return t("error.validNumber")
-              },
-              maxBalance: (value) => {
-                try {
-                  if (assetMeta.decimals == null)
-                    throw new Error("Missing asset meta")
-                  if (
-                    balance.data?.balance.gte(
-                      BigNumber(value).multipliedBy(
-                        BN_10.pow(assetMeta.decimals),
-                      ),
-                    )
-                  )
-                    return true
-                } catch {}
-                return t("liquidity.add.modal.validation.notEnoughBalance")
-              },
-              positive: (value) =>
-                new BigNumber(value).gt(0) || t("error.positive"),
-            },
-          }}
           render={({
             field: { name, value, onChange },
             fieldState: { error },
@@ -241,34 +265,52 @@ export function WalletTransferSectionOnchain({
                   : t("wallet.assets.transfer.asset.label_mob")
               }
               name={name}
+              balance={balance}
+              balanceMax={balanceMax}
               value={value}
               onChange={onChange}
               asset={asset}
               error={error?.message}
-              onAssetOpen={openAssets}
+              onAssetOpen={staticAsset ? undefined : openAssets}
             />
           )}
         />
-        {asset !== "0" && (
-          <Alert variant="warning" css={{ marginTop: 22 }}>
-            {t("wallet.assets.transfer.warning.nonNative")}
-          </Alert>
-        )}
-        <Spacer size={15} />
         <SummaryRow
           label={t("wallet.assets.transfer.transaction_cost")}
           content={
-            paymentInfoData?.partialFee != null
-              ? t("liquidity.add.modal.row.transactionCostValue", {
-                  amount: new BigNumber(
-                    paymentInfoData.partialFee.toHex(),
-                  ).multipliedBy(spotPrice.data?.spotPrice ?? BN_1),
-                  symbol: accountCurrencyMeta?.symbol,
-                  fixedPointScale: 12,
-                })
-              : ""
+            insufficientFee ? (
+              <div sx={{ flex: "row", gap: 4 }}>
+                {basicFeeComp}
+                <Text fs={14} color="brightBlue300" tAlign="right">
+                  {t("value.tokenWithSymbol", {
+                    value: insufficientFee.displayValue.multipliedBy(
+                      spotPrice.data?.spotPrice ?? BN_1,
+                    ),
+                    symbol: accountCurrencyMeta?.symbol,
+                    numberPrefix: "+  ",
+                  })}
+                </Text>
+              </div>
+            ) : (
+              basicFeeComp
+            )
           }
         />
+        {asset !== "0" && (
+          <Alert variant="warning">
+            {t("wallet.assets.transfer.warning.nonNative")}
+          </Alert>
+        )}
+        {insufficientFee && (
+          <Alert variant="info">
+            {t("wallet.assets.transfer.warning.insufficient", {
+              value: insufficientFee.displayValue.multipliedBy(
+                spotPrice.data?.spotPrice ?? BN_1,
+              ),
+              symbol: accountCurrencyMeta?.symbol,
+            })}
+          </Alert>
+        )}
       </div>
       <div>
         <Separator color="darkBlue401" sx={{ mt: 31 }} />

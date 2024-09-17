@@ -23,21 +23,21 @@ export const useBondsSkeleton = (config?: Config) => {
     maturity: isDesktop,
     balance: true,
     price: isDesktop,
-    actions: true,
+    actions: isDesktop,
   }
 
   const columns = useMemo(
     () => [
       display({
         id: "assetId",
-        header: t("bonds.table.bond"),
+        header: t("bond"),
         cell: () => (
           <Skeleton width={64} height={32} enableAnimation={enableAnimation} />
         ),
       }),
       display({
         id: "maturity",
-        header: t("bonds.table.maturity"),
+        header: t("bonds.maturity"),
         cell: () => (
           <Skeleton
             width="100%"
@@ -91,7 +91,7 @@ export const useBondsSkeleton = (config?: Config) => {
       }),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [config?.showTransactions],
+    [config?.showTransactions, isDesktop],
   )
 
   return useReactTable({

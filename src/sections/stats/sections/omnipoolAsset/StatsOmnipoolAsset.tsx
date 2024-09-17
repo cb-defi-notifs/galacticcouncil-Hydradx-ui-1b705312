@@ -1,21 +1,14 @@
-import ChevronDownIcon from "assets/icons/ChevronRight.svg?react"
-import {
-  BackButton,
-  SOmnipoolAssetContainer,
-} from "./StatsOmnipoolAsset.styled"
+import { SOmnipoolAssetContainer } from "./StatsOmnipoolAsset.styled"
 import {
   MakeGenerics,
   Navigate,
-  useNavigate,
+  useLocation,
   useSearch,
 } from "@tanstack/react-location"
 import { Text } from "components/Typography/Text/Text"
-import { Icon } from "components/Icon/Icon"
-import { useOmnipoolOverviewData } from "sections/stats/sections/overview/data/OmnipoolOverview.utils"
 import { useTranslation } from "react-i18next"
 import { AssetStats } from "./stats/AssetStats"
-// TODO: temporarily hidden
-// import { LiquidityProvidersTableWrapper } from "./LiquidityProvidersTable/LiquidityProvidersTableWrapper"
+import { LiquidityProvidersTableWrapper } from "./LiquidityProvidersTable/LiquidityProvidersTableWrapper"
 import { Spacer } from "components/Spacer/Spacer"
 import BN from "bignumber.js"
 import Skeleton from "react-loading-skeleton"
@@ -26,41 +19,16 @@ import { RecentTradesTableWrapperData } from "sections/stats/components/RecentTr
 import { RecentTradesTableSkeleton } from "sections/stats/components/RecentTradesTable/skeleton/RecentTradesTableSkeleton"
 import { ChartWrapper } from "sections/stats/components/ChartsWrapper/ChartsWrapper"
 import { SStatsCardContainer } from "sections/stats/StatsPage.styled"
-import { AssetLogo } from "components/AssetIcon/AssetIcon"
+import { MultipleAssetLogo } from "components/AssetIcon/AssetIcon"
 import { useRpcProvider } from "providers/rpcProvider"
+import { LiquidityProvidersTableSkeleton } from "sections/stats/sections/omnipoolAsset/LiquidityProvidersTable/skeleton/LiquidityProvidersTableSkeleton"
+import { useOmnipoolAssetDetails } from "sections/stats/StatsPage.utils"
+import { LINKS } from "utils/navigation"
+import { useAssets } from "providers/assets"
 
 type SearchGenerics = MakeGenerics<{
-  Search: { asset: number }
+  Search: { id: number }
 }>
-
-const OmnipoolAssetNavigation = () => {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-
-  return (
-    <>
-      <div sx={{ flex: "row", gap: 10, align: "center", mb: 15 }}>
-        <BackButton
-          name="Expand"
-          icon={<ChevronDownIcon />}
-          onClick={() => navigate({ to: "" })}
-          size={24}
-        />
-        <Text fs={13} tTransform="uppercase" color="white">
-          {t("stats.omnipool.navigation.back")}
-        </Text>
-      </div>
-      <div
-        sx={{ height: 1, width: "100vw" }}
-        css={{
-          background: "rgba(84, 99, 128, 0.35)",
-          position: "absolute",
-          left: 0,
-        }}
-      />
-    </>
-  )
-}
 
 const OmnipoolAssetHeader = ({
   loading,
@@ -72,8 +40,8 @@ const OmnipoolAssetHeader = ({
   tvl?: BN
 }) => {
   const { t } = useTranslation()
-  const { assets } = useRpcProvider()
-  const asset = assetId ? assets.getAsset(assetId) : undefined
+  const { getAsset } = useAssets()
+  const asset = assetId ? getAsset(assetId) : undefined
   const isDesktop = useMedia(theme.viewport.gte.sm)
 
   const isLoading = loading
@@ -84,7 +52,7 @@ const OmnipoolAssetHeader = ({
         flex: "row",
         align: "center",
         justify: "space-between",
-        py: [18, 40],
+        pb: [18, 40],
       }}
     >
       <div sx={{ flex: "row", gap: 16, align: "center" }}>
@@ -95,7 +63,7 @@ const OmnipoolAssetHeader = ({
             circle
           />
         ) : (
-          <Icon size={[30, 38]} icon={<AssetLogo id={asset.id} />} />
+          <MultipleAssetLogo size={[30, 38]} iconId={asset?.iconId} />
         )}
 
         <div>
@@ -106,7 +74,7 @@ const OmnipoolAssetHeader = ({
             </>
           ) : (
             <>
-              <Text fs={[15, 28]} font="FontOver" color="white">
+              <Text fs={[15, 28]} font="GeistMono" color="white">
                 {asset.symbol}
               </Text>
               <Text fs={[12, 13]} tTransform="uppercase" color="white">
@@ -121,9 +89,7 @@ const OmnipoolAssetHeader = ({
         {isLoading || !tvl ? (
           <Skeleton width={200} height={isDesktop ? 42 : 18} />
         ) : (
-          <Text fs={[18, 42]} font="FontOver">
-            {t("value.usd", { amount: tvl })}
-          </Text>
+          <Text fs={[18, 42]}>{t("value.usd", { amount: tvl })}</Text>
         )}
 
         <Text fs={[12, 16]} color="brightBlue300">
@@ -136,9 +102,10 @@ const OmnipoolAssetHeader = ({
 
 export const StatsOmnipoolAsset = () => {
   const search = useSearch<SearchGenerics>()
-  const assetId = search.asset?.toString()
+  const assetId = search.id?.toString() as string
+  const location = useLocation()
 
-  if (!assetId) {
+  if (!assetId && location.current.pathname === LINKS.statsOmnipool) {
     return <Navigate to="/stats" />
   }
 
@@ -147,7 +114,7 @@ export const StatsOmnipoolAsset = () => {
 
 const StatsOmnipoolAssetData = ({ assetId }: { assetId: string }) => {
   const { isLoaded } = useRpcProvider()
-  const overviewData = useOmnipoolOverviewData()
+  const overviewData = useOmnipoolAssetDetails("tvl")
 
   const omnipoolAsset = overviewData.data.find(
     (overview) => overview.id === assetId,
@@ -168,26 +135,28 @@ const StatsOmnipoolAssetData = ({ assetId }: { assetId: string }) => {
 
   return (
     <SOmnipoolAssetContainer>
-      <OmnipoolAssetNavigation />
       <OmnipoolAssetHeader assetId={assetId} tvl={omnipoolAsset.tvl} />
-      <div sx={{ flex: ["column", "row"], gap: 20, mb: 20 }}>
+      <div sx={{ flex: ["column", "row"], gap: [12, 20] }}>
         <AssetStats
           data={{
             vlm: omnipoolAsset.volume,
             cap: omnipoolAsset.cap.multipliedBy(100),
             pol: omnipoolAsset.pol,
             share: omnipoolAsset.tvl.div(omnipollTvl).multipliedBy(100),
+            assetId,
+            fee: omnipoolAsset.fee,
           }}
+          isLoadingFee={omnipoolAsset.isLoadingFee}
         />
         <SStatsCardContainer
-          sx={{ width: "100%", height: [500, 600], pt: [60, 20] }}
+          sx={{ width: "100%", height: [500, 570], pt: [60, 20] }}
           css={{ position: "relative" }}
         >
-          <ChartWrapper assetSymbol={omnipoolAsset.symbol} />
+          <ChartWrapper assetId={omnipoolAsset.id} />
         </SStatsCardContainer>
       </div>
-      {/* TODO: temporarily hidden */}
-      {/*<LiquidityProvidersTableWrapper />*/}
+      <Spacer size={[24, 60]} />
+      <LiquidityProvidersTableWrapper assetId={assetId} />
       <Spacer size={[24, 60]} />
       <RecentTradesTableWrapperData assetId={assetId} />
     </SOmnipoolAssetContainer>
@@ -197,19 +166,18 @@ const StatsOmnipoolAssetData = ({ assetId }: { assetId: string }) => {
 const StatsOmnipoolAssetSkeleton = () => {
   return (
     <SOmnipoolAssetContainer>
-      <OmnipoolAssetNavigation />
       <OmnipoolAssetHeader loading />
-      <div sx={{ flex: ["column", "row"], gap: 20, mb: 20 }}>
+      <div sx={{ flex: ["column", "row"], gap: [12, 20] }}>
         <AssetStats loading />
         <SStatsCardContainer
-          sx={{ width: "100%", height: [500, 600] }}
+          sx={{ width: "100%", height: [500, 570], pt: [60, 20] }}
           css={{ position: "relative" }}
         >
           <ChartWrapper />
         </SStatsCardContainer>
       </div>
-      {/* TODO: temporarily hidden */}
-      {/*<LiquidityProvidersTableWrapper />*/}
+      <Spacer size={[24, 60]} />
+      <LiquidityProvidersTableSkeleton />
       <Spacer size={[24, 60]} />
       <RecentTradesTableSkeleton />
     </SOmnipoolAssetContainer>

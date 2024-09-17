@@ -6,17 +6,20 @@ import { ApiPromise } from "@polkadot/api"
 import { Maybe, undefinedNoop } from "utils/helpers"
 import { u32 } from "@polkadot/types"
 import BigNumber from "bignumber.js"
-import BN from "bn.js"
 import { useRpcProvider } from "providers/rpcProvider"
 import { calculateFreeBalance } from "./balances"
-import { BN_0 } from "utils/constants"
 
-export const useAccountBalances = (id: Maybe<AccountId32 | string>) => {
-  const { api } = useRpcProvider()
+export const useAccountBalances = (
+  id: Maybe<AccountId32 | string>,
+  noRefresh?: boolean,
+) => {
+  const { api, isLoaded } = useRpcProvider()
   return useQuery(
-    QUERY_KEYS.accountBalances(id),
-    !!id ? getAccountBalancesNew(api, id) : undefinedNoop,
-    { enabled: id != null },
+    noRefresh
+      ? QUERY_KEYS.accountBalances(id)
+      : QUERY_KEYS.accountBalancesLive(id),
+    !!id ? getAccountBalances(api, id) : undefinedNoop,
+    { enabled: id != null && isLoaded },
   )
 }
 
@@ -30,20 +33,6 @@ export const useAccountsBalances = (ids: string[]) => {
 
 export const getAccountBalances =
   (api: ApiPromise, accountId: AccountId32 | string) => async () => {
-    const [tokens, native] = await Promise.all([
-      api.query.tokens.accounts.entries(accountId),
-      api.query.system.account(accountId),
-    ])
-    const balances = tokens.map(([key, data]) => {
-      const [, id] = key.args
-      return { id, data }
-    })
-
-    return { accountId, native, balances }
-  }
-
-export const getAccountBalancesNew =
-  (api: ApiPromise, accountId: AccountId32 | string) => async () => {
     const [tokens, nativeData] = await Promise.all([
       api.query.tokens.accounts.entries(accountId),
       api.query.system.account(accountId),
@@ -55,7 +44,7 @@ export const getAccountBalancesNew =
       const reservedBalance = new BigNumber(data.reserved.toHex())
       const frozenBalance = new BigNumber(data.frozen.toHex())
       const balance = new BigNumber(
-        calculateFreeBalance(freeBalance, BN_0, frozenBalance) ?? NaN,
+        calculateFreeBalance(freeBalance, frozenBalance) ?? NaN,
       )
 
       return {
@@ -63,28 +52,28 @@ export const getAccountBalancesNew =
         id: id.toString(),
         balance,
         total: freeBalance.plus(reservedBalance),
+        reservedBalance,
         freeBalance,
       }
     })
 
     const freeBalance = new BigNumber(nativeData.data.free.toHex())
-    const miscFrozenBalance = new BigNumber(nativeData.data.miscFrozen.toHex())
-    const feeFrozenBalance = new BigNumber(nativeData.data.feeFrozen.toHex())
+
+    const frozenBalance = new BigNumber(nativeData.data.frozen.toHex())
     const reservedBalance = new BigNumber(nativeData.data.reserved.toHex())
 
-    const balance = new BigNumber(
-      calculateFreeBalance(freeBalance, miscFrozenBalance, feeFrozenBalance),
-    )
+    const balance = freeBalance.minus(frozenBalance)
 
     const native = {
       accountId: accountId.toString(),
       id: NATIVE_ASSET_ID,
       balance,
       total: freeBalance.plus(reservedBalance),
+      reservedBalance,
       freeBalance,
     }
 
-    return { native, balances }
+    return { native, balances, accountId }
   }
 
 export const useAccountAssetBalances = (
@@ -116,9 +105,9 @@ const getAccountAssetBalances =
     ])
 
     const values: Array<{
-      free: BN
-      reserved: BN
-      frozen: BN
+      free: BigNumber
+      reserved: BigNumber
+      frozen: BigNumber
       assetId: string
     }> = []
     for (
@@ -132,20 +121,18 @@ const getAccountAssetBalances =
       if (assetId.toString() === NATIVE_ASSET_ID) {
         values.push({
           assetId: assetId.toString(),
-          free: natives[nativeIdx].data.free,
-          reserved: natives[nativeIdx].data.reserved,
-          frozen: natives[nativeIdx].data.feeFrozen.add(
-            natives[nativeIdx].data.miscFrozen,
-          ),
+          free: natives[nativeIdx].data.free.toBigNumber(),
+          reserved: natives[nativeIdx].data.reserved.toBigNumber(),
+          frozen: natives[nativeIdx].data.frozen.toBigNumber(),
         })
 
         nativeIdx += 1
       } else {
         values.push({
           assetId: assetId.toString(),
-          free: tokens[tokenIdx].free,
-          reserved: tokens[tokenIdx].reserved,
-          frozen: tokens[tokenIdx].frozen,
+          free: tokens[tokenIdx].free.toBigNumber(),
+          reserved: tokens[tokenIdx].reserved.toBigNumber(),
+          frozen: tokens[tokenIdx].frozen.toBigNumber(),
         })
 
         tokenIdx += 1

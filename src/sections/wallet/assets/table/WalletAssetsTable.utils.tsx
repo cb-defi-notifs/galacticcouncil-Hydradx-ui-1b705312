@@ -1,7 +1,7 @@
-import BN from "bignumber.js"
 import {
   createColumnHelper,
   getCoreRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
   SortingState,
   useReactTable,
@@ -13,31 +13,39 @@ import { WalletAssetsTableBalance } from "sections/wallet/assets/table/data/Wall
 import { WalletAssetsTableActions } from "sections/wallet/assets/table/actions/WalletAssetsTableActions"
 import { useMedia } from "react-use"
 import { theme } from "theme"
-import { PalletAssetRegistryAssetType } from "@polkadot/types/lookup"
-import { useNavigate } from "@tanstack/react-location"
 import { AssetTableName } from "components/AssetTableName/AssetTableName"
+import { ButtonTransparent } from "components/Button/Button"
+import ChevronRightIcon from "assets/icons/ChevronRight.svg?react"
+import { Icon } from "components/Icon/Icon"
+import { AssetsTableData } from "./data/WalletAssetsTableData.utils"
+import {
+  defaultPaginationState,
+  useTablePagination,
+} from "components/Table/TablePagination"
 
 export const useAssetsTable = (
   data: AssetsTableData[],
   actions: { onTransfer: (assetId: string) => void },
 ) => {
-  const navigate = useNavigate()
   const { t } = useTranslation()
   const { accessor, display } = createColumnHelper<AssetsTableData>()
   const [sorting, setSorting] = useState<SortingState>([])
+  const [pagination, setPagination] = useTablePagination()
 
   const isDesktop = useMedia(theme.viewport.gte.sm)
   const columnVisibility: VisibilityState = {
     name: true,
     transferable: true,
     total: isDesktop,
-    actions: true,
+    actions: isDesktop,
   }
 
   const columns = useMemo(
     () => [
       accessor("symbol", {
         id: "name",
+        //width percentage of column
+        size: 26,
         header: isDesktop
           ? t("wallet.assets.table.header.name")
           : t("selectAssets.asset"),
@@ -48,18 +56,38 @@ export const useAssetsTable = (
         id: "transferable",
         header: t("wallet.assets.table.header.transferable"),
         sortingFn: (a, b) =>
-          a.original.transferable.gt(b.original.transferable) ? 1 : -1,
+          a.original.transferableDisplay.gt(b.original.transferableDisplay)
+            ? 1
+            : -1,
         cell: ({ row }) => (
-          <WalletAssetsTableBalance
-            balance={row.original.transferable}
-            balanceDisplay={row.original.transferableDisplay}
-          />
+          <div
+            sx={{
+              flex: "row",
+              gap: 1,
+              align: "center",
+              justify: ["end", "start"],
+            }}
+          >
+            <WalletAssetsTableBalance
+              balance={row.original.transferable}
+              balanceDisplay={row.original.transferableDisplay}
+            />
+            {!isDesktop && (
+              <ButtonTransparent css={{ color: theme.colors.iconGray }}>
+                <Icon
+                  sx={{ color: "darkBlue300" }}
+                  icon={<ChevronRightIcon />}
+                />
+              </ButtonTransparent>
+            )}
+          </div>
         ),
       }),
       accessor("total", {
         id: "total",
         header: t("wallet.assets.table.header.total"),
-        sortingFn: (a, b) => (a.original.total.gt(b.original.total) ? 1 : -1),
+        sortingFn: (a, b) =>
+          a.original.totalDisplay.gt(b.original.totalDisplay) ? 1 : -1,
         cell: ({ row }) => (
           <WalletAssetsTableBalance
             balance={row.original.total}
@@ -69,34 +97,14 @@ export const useAssetsTable = (
       }),
       display({
         id: "actions",
+        //width percentage of column
+        size: 38,
         cell: ({ row }) => (
           <WalletAssetsTableActions
-            couldBeSetAsPaymentFee={row.original.couldBeSetAsPaymentFee}
-            onBuyClick={
-              row.original.tradability.inTradeRouter &&
-              row.original.tradability.canBuy
-                ? () =>
-                    navigate({
-                      to: "/trade/swap",
-                      search: { assetOut: row.original.id },
-                    })
-                : undefined
-            }
-            onSellClick={
-              row.original.tradability.inTradeRouter &&
-              row.original.tradability.canSell
-                ? () =>
-                    navigate({
-                      to: "/trade/swap",
-                      search: { assetIn: row.original.id },
-                    })
-                : undefined
-            }
             toggleExpanded={row.toggleSelected}
             isExpanded={row.getIsSelected()}
             onTransferClick={() => actions.onTransfer(row.original.id)}
-            symbol={row.original.symbol}
-            id={row.original.id}
+            asset={row.original}
           />
         ),
       }),
@@ -108,37 +116,15 @@ export const useAssetsTable = (
   return useReactTable({
     data,
     columns,
-    state: { sorting, columnVisibility },
-    onSortingChange: setSorting,
+    state: { sorting, columnVisibility, pagination },
+    onSortingChange: (data) => {
+      setSorting(data)
+      setPagination(defaultPaginationState)
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onPaginationChange: setPagination,
+    autoResetPageIndex: false,
   })
-}
-
-export type AssetsTableData = {
-  id: string
-  symbol: string
-  name: string
-  transferable: BN
-  transferableDisplay: BN
-  total: BN
-  totalDisplay: BN
-  lockedMax: BN
-  lockedMaxDisplay: BN
-  lockedVesting: BN
-  lockedVestingDisplay: BN
-  lockedDemocracy: BN
-  lockedDemocracyDisplay: BN
-  reserved: BN
-  reservedDisplay: BN
-  assetType: PalletAssetRegistryAssetType["type"]
-  couldBeSetAsPaymentFee: boolean
-  isPaymentFee: boolean
-  tradability: {
-    inTradeRouter: boolean
-    canBuy: boolean
-    canSell: boolean
-    canAddLiquidity: boolean
-    canRemoveLiquidity: boolean
-  }
 }

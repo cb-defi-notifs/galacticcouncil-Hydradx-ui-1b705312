@@ -1,23 +1,35 @@
-import IconSettings from "assets/icons/IconSettings.svg?react"
+import SettingsIcon from "assets/icons/SettingsIcon.svg?react"
 import { IconButton } from "components/IconButton/IconButton"
 import { Modal } from "components/Modal/Modal"
 import { Text } from "components/Typography/Text/Text"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { HeaderSettingsContents } from "components/Layout/Header/settings/HeaderSettings"
+import { SettingsContents } from "components/Layout/Header/toolbar/buttons/Settings"
 import { theme } from "theme"
+import { useSettingsStore } from "state/store"
+import { DegenModeModal } from "components/Layout/Header/DegenMode/DegenModeModal"
 
 export const HeaderSettingsMobile = () => {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [degenModalOpen, setDegenModalOpen] = useState(false)
+  const { degenMode, toggleDegenMode } = useSettingsStore()
+
+  const onDegenModalClose = () => setDegenModalOpen(false)
+  const onDegenModalAccept = () => {
+    toggleDegenMode()
+    setDegenModalOpen(false)
+  }
 
   return (
     <>
-      <div sx={{ flex: "row", align: "center", gap: 10 }}>
+      <div
+        sx={{ flex: "row", align: "center", gap: 10 }}
+        onClick={() => setOpen(true)}
+      >
         <IconButton
           size={34}
-          onClick={() => setOpen(true)}
-          icon={<IconSettings />}
+          icon={<SettingsIcon />}
           css={{
             border: "none",
             color: theme.colors.brightBlue100,
@@ -30,8 +42,24 @@ export const HeaderSettingsMobile = () => {
         </Text>
       </div>
       <Modal open={open}>
-        <HeaderSettingsContents onClose={() => setOpen(false)} />
+        <SettingsContents
+          onClose={() => setOpen(false)}
+          onDegenModeChange={() => {
+            if (degenMode) {
+              toggleDegenMode()
+            } else {
+              setDegenModalOpen(true)
+            }
+          }}
+        />
       </Modal>
+      {degenModalOpen && (
+        <DegenModeModal
+          open={degenModalOpen}
+          onClose={onDegenModalClose}
+          onAccept={onDegenModalAccept}
+        />
+      )}
     </>
   )
 }

@@ -5,7 +5,6 @@ import { css } from "@emotion/react"
 
 export const SContainer = styled.label<{ error?: boolean; disabled?: boolean }>`
   padding: 12px 18px 20px 18px;
-  margin-top: 10px;
 
   transition: ${theme.transitions.default};
 
@@ -14,8 +13,13 @@ export const SContainer = styled.label<{ error?: boolean; disabled?: boolean }>`
   border-bottom: 1px solid
     ${(p) => (p.error ? theme.colors.error : theme.colors.darkBlue400)};
 
+  margin-left: calc(var(--modal-content-padding) * -1);
+  margin-right: calc(var(--modal-content-padding) * -1);
+
   @media ${theme.viewport.gte.sm} {
-    padding: 12px;
+    padding: 12px 16px;
+    margin-left: 0;
+    margin-right: 0;
   }
 
   ${({ disabled, error }) =>
@@ -65,12 +69,17 @@ export const SSelectAssetButton = styled(Button)`
 
   padding: 0;
   margin-right: 20px;
+  padding: 6px 2px;
   color: white;
 
   :hover {
-    all: unset;
+    border: unset;
     margin-right: 20px;
-    color: ${theme.colors.brightBlue200};
     cursor: pointer;
+    background: rgba(${theme.rgbColors.white}, 0.06);
+  }
+
+  & > span {
+    min-width: 0;
   }
 `

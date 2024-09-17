@@ -8,8 +8,9 @@ import { Text } from "components/Typography/Text/Text"
 import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { BN_0, BN_10, PARACHAIN_BLOCK_TIME } from "utils/constants"
-import { SBar, SContainer, SHeader, SVotedBage } from "./ReferendumCard.styled"
+import { SContainer, SHeader, SVotedBage } from "./ReferendumCard.styled"
 import { ReferendumCardSkeleton } from "./ReferendumCardSkeleton"
+import { ReferendumCardProgress } from "./ReferendumCardProgress"
 import { Icon } from "components/Icon/Icon"
 import BN from "bignumber.js"
 import { useBestNumber } from "api/chain"
@@ -54,7 +55,6 @@ export const ReferendumCard = ({ id, referendum, type, voted }: Props) => {
     return { ayes, nays, percAyes, percNays }
   }, [referendum])
 
-  const isNoVotes = votes.percAyes.eq(0) && votes.percNays.eq(0)
   const diff = BN(info?.data?.onchainData.meta.end ?? 0)
     .minus(bestNumber.data?.parachainBlockNumber.toBigNumber() ?? 0)
     .times(PARACHAIN_BLOCK_TIME)
@@ -109,23 +109,10 @@ export const ReferendumCard = ({ id, referendum, type, voted }: Props) => {
 
       <Spacer size={20} />
 
-      <div sx={{ flex: "row", gap: 8 }}>
-        {isNoVotes ? (
-          <SBar variant="neutral" percentage={100} />
-        ) : (
-          <>
-            {/*zero value of progress bar should be visible*/}
-            <SBar
-              variant="aye"
-              percentage={votes.percAyes.eq(0) ? 2 : votes.percAyes.toNumber()}
-            />
-            <SBar
-              variant="nay"
-              percentage={votes.percNays.eq(0) ? 2 : votes.percNays.toNumber()}
-            />
-          </>
-        )}
-      </div>
+      <ReferendumCardProgress
+        percAyes={votes.percAyes}
+        percNays={votes.percNays}
+      />
 
       <Spacer size={4} />
 

@@ -10,25 +10,24 @@ import {
   TableRowStats,
 } from "components/Table/Table.styled"
 import { Text } from "components/Typography/Text/Text"
-
 import { useMedia } from "react-use"
 import { theme } from "theme"
 import { useTranslation } from "react-i18next"
 import { useLiquidityProvidersTable } from "./LiquidityProvidersTable.utils"
 import { Icon } from "components/Icon/Icon"
 import TitleIcon from "assets/icons/StakingTableIcon.svg?react"
+import { TLiquidityProvidersTableData } from "./data/LiquidityProvidersTableData.utils"
 
 type Props = {
-  data: any
+  data: TLiquidityProvidersTableData
 }
 
 export const LiquidityProvidersTable = ({ data }: Props) => {
   const { t } = useTranslation()
   const isDesktop = useMedia(theme.viewport.gte.sm)
 
-  const onRowSelect = (assetId: string) => {
-    // TODO
-    console.log(assetId)
+  const onRowSelect = (account: string) => {
+    window.open(`https://hydration.subscan.io/account/${account}`, "_blank")
   }
 
   const table = useLiquidityProvidersTable(data)
@@ -36,14 +35,9 @@ export const LiquidityProvidersTable = ({ data }: Props) => {
   return (
     <StatsTableContainer>
       <StatsTableTitle>
-        <div sx={{ flex: "row", align: "center", gap: 12, mt: [0, 20] }}>
+        <div sx={{ flex: "row", align: "end", gap: 12 }}>
           <Icon sx={{ color: "white" }} icon={<TitleIcon />} />
-          <Text
-            fs={[18, 24]}
-            lh={[24, 26]}
-            color="white"
-            font="ChakraPetchBold"
-          >
+          <Text fs={[14, 19]} lh={20} color="white" font="GeistMono">
             {t("stats.omnipool.table.providers.title")}
           </Text>
         </div>
@@ -80,7 +74,7 @@ export const LiquidityProvidersTable = ({ data }: Props) => {
         <TableBodyContent>
           {table.getRowModel().rows.map((row, i) => (
             <TableRowStats
-              onClick={() => onRowSelect(row.original.id)}
+              onClick={() => onRowSelect(row.original.account)}
               key={row.id}
               css={{ cursor: "pointer" }}
             >

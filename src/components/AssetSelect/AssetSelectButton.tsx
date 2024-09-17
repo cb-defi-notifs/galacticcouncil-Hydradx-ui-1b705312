@@ -1,69 +1,71 @@
 import { Icon } from "components/Icon/Icon"
 import { Text } from "components/Typography/Text/Text"
 import { theme } from "theme"
-import { AssetLogo } from "components/AssetIcon/AssetIcon"
+import { MultipleAssetLogo } from "components/AssetIcon/AssetIcon"
 import { SSelectAssetButton } from "./AssetSelect.styled"
 import ChevronDown from "assets/icons/ChevronDown.svg?react"
-import { useRpcProvider } from "providers/rpcProvider"
-import { MultipleIcons } from "components/MultipleIcons/MultipleIcons"
+import { useMedia } from "react-use"
+import { useTranslation } from "react-i18next"
+import { useAssets } from "providers/assets"
 
 type Props = {
   onClick?: () => void
   assetId: string
+  className?: string
 }
 
-export const AssetSelectButton = ({ onClick, assetId }: Props) => {
-  const { assets } = useRpcProvider()
-  const asset = assets.getAsset(assetId)
+export const AssetSelectButton = ({ onClick, assetId, className }: Props) => {
+  const { t } = useTranslation()
+  const { getAsset } = useAssets()
+  const asset = getAsset(assetId)
+  const isTablet = useMedia(theme.viewport.gte.sm)
+
+  const isAssetFound = !!asset?.id
 
   const symbol = asset?.symbol
   const name = asset?.name
 
-  let iconIds: string | string[]
-
-  if (assets.isStableSwap(asset)) {
-    iconIds = asset.assets
-  } else if (assets.isBond(asset)) {
-    iconIds = asset.assetId
-  } else {
-    iconIds = asset.id
-  }
+  const isSelectable = !!onClick
 
   return (
     <SSelectAssetButton
+      className={className}
       size="small"
       onClick={(e) => {
         e.preventDefault()
         onClick?.()
       }}
     >
-      {typeof iconIds === "string" ? (
-        <Icon icon={<AssetLogo id={iconIds} />} size={30} />
-      ) : (
-        <MultipleIcons
-          icons={iconIds.map((asset) => ({
-            icon: <AssetLogo id={asset} />,
-          }))}
-        />
+      <MultipleAssetLogo size={30} iconId={asset?.iconId} />
+
+      {isAssetFound && (
+        <div sx={{ flex: "column", justify: "space-between", minWidth: 0 }}>
+          <Text fw={700} font="GeistMedium" lh={16} color="white">
+            {symbol}
+          </Text>
+          <Text
+            fs={13}
+            lh={13}
+            css={{
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              color: `rgba(${theme.rgbColors.whiteish500}, 0.6)`,
+              display: isTablet ? "block" : "none",
+            }}
+          >
+            {name}
+          </Text>
+        </div>
       )}
 
-      <div sx={{ flex: "column", justify: "space-between" }}>
-        <Text fw={700} lh={16} color="white">
-          {symbol}
+      {!isAssetFound && isSelectable && (
+        <Text fw={700} font="GeistMedium" lh={16} color="white">
+          {t("wallet.assets.transfer.asset.label_mob")}
         </Text>
-        <Text
-          fs={13}
-          lh={13}
-          css={{
-            whiteSpace: "nowrap",
-            color: `rgba(${theme.rgbColors.whiteish500}, 0.6)`,
-          }}
-        >
-          {name}
-        </Text>
-      </div>
+      )}
 
-      {!!onClick && <Icon icon={<ChevronDown />} />}
+      {isSelectable && <Icon icon={<ChevronDown />} />}
     </SSelectAssetButton>
   )
 }

@@ -11,7 +11,7 @@ import CrossIcon from "assets/icons/CrossIcon.svg?react"
 import { Text } from "components/Typography/Text/Text"
 import { TOAST_CLOSE_TIME } from "utils/constants"
 import { ToastContent } from "./ToastContent"
-import { motion } from "framer-motion"
+import { m as motion } from "framer-motion"
 import { ToastVariant } from "state/toasts"
 
 type Props = {
@@ -25,6 +25,7 @@ type Props = {
   persist?: boolean
   dateCreated?: Date
   onClick?: () => void
+  hideTime?: number
 }
 
 export const Toast: FC<Props> = ({
@@ -38,6 +39,7 @@ export const Toast: FC<Props> = ({
   onClose,
   onClick,
   persist,
+  hideTime,
 }) => {
   const { t } = useTranslation()
 
@@ -74,12 +76,12 @@ export const Toast: FC<Props> = ({
               variant={variant}
               initial={{ width: "0%" }}
               animate={!persist && { width: "100%" }}
-              transition={{ duration: TOAST_CLOSE_TIME / 1000 }}
+              transition={{ duration: (hideTime ?? TOAST_CLOSE_TIME) / 1000 }}
               onAnimationComplete={onClose}
             />
           </SProgressContainer>
         </ToastContent>
-        <SClose aria-label={t("toast.close")} onClick={onClose}>
+        <SClose aria-label={t("close")} onClick={onClose}>
           <CrossIcon />
         </SClose>
       </motion.div>

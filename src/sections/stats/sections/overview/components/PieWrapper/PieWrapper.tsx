@@ -6,30 +6,37 @@ import { useMedia } from "react-use"
 import { theme } from "theme"
 import { useMemo, useState } from "react"
 import { SContainerVertical } from "sections/stats/StatsPage.styled"
-import { TOmnipoolOverviewData } from "sections/stats/sections/overview/data/OmnipoolOverview.utils"
 import { BN_0 } from "utils/constants"
 import { useTranslation } from "react-i18next"
 import { ChartWrapper } from "sections/stats/components/ChartsWrapper/ChartsWrapper"
+import { TUseOmnipoolAssetDetailsData } from "sections/stats/StatsPage.utils"
 
 type PieWrapperProps = {
-  data: TOmnipoolOverviewData
+  data: TUseOmnipoolAssetDetailsData
   isLoading: boolean
+  className?: string
 }
 
-export const PieWrapper = ({ data, isLoading }: PieWrapperProps) => {
+export const PieWrapper = ({ data, isLoading, className }: PieWrapperProps) => {
   const { t } = useTranslation()
   const isDesktop = useMedia(theme.viewport.gte.sm)
   const [activeSection, setActiveSection] = useState<"overview" | "chart">(
     "overview",
   )
 
+  const isLoadingVolume = !!data?.some((pool) => pool.isLoadingVolume)
+
   const { totalTvl, totalPol, totalVolume } = useMemo(() => {
     return data.reduce(
       (acc, omnipoolAsset) => {
         acc = {
-          totalTvl: acc.totalTvl.plus(omnipoolAsset.tvl),
+          totalTvl: acc.totalTvl.plus(
+            omnipoolAsset.tvl.isNaN() ? 0 : omnipoolAsset.tvl,
+          ),
           totalPol: acc.totalPol.plus(omnipoolAsset.pol),
-          totalVolume: acc.totalVolume.plus(omnipoolAsset.volume),
+          totalVolume: acc.totalVolume.plus(
+            omnipoolAsset.volume.isNaN() ? 0 : omnipoolAsset.volume,
+          ),
         }
         return acc
       },
@@ -51,6 +58,7 @@ export const PieWrapper = ({ data, isLoading }: PieWrapperProps) => {
           flexWrap: "wrap",
           gap: 20,
         }}
+        css={{ "& > span": { width: "100%" } }}
       >
         <PieTotalValue
           title={t("stats.overview.pie.values.pol")}
@@ -60,20 +68,14 @@ export const PieWrapper = ({ data, isLoading }: PieWrapperProps) => {
         <PieTotalValue
           title={t("stats.overview.pie.values.volume")}
           data={totalVolume.div(2)}
-          isLoading={isLoading}
+          isLoading={isLoading || isLoadingVolume}
         />
       </div>
     </div>
   )
 
   return (
-    <SContainerVertical
-      sx={{
-        width: ["100%", "fit-content"],
-        height: [500, "100%"],
-        p: [20, 40],
-      }}
-    >
+    <SContainerVertical className={className}>
       {!isDesktop && (
         <ChartSwitchMobile onClick={setActiveSection} active={activeSection} />
       )}
@@ -88,7 +90,16 @@ export const PieWrapper = ({ data, isLoading }: PieWrapperProps) => {
           {pieChartValues}
         </>
       ) : (
-        <ChartWrapper />
+        <div
+          sx={{
+            flex: "column",
+            height: [500, "100%"],
+            gap: [24, 40],
+            pt: [40, 0],
+          }}
+        >
+          <ChartWrapper />
+        </div>
       )}
     </SContainerVertical>
   )

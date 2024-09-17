@@ -1,79 +1,68 @@
-import { u32 } from "@polkadot/types-codec"
-import { useApiIds } from "api/consts"
-import { getVolumeAssetTotalValue, useTradeVolumes } from "api/volume"
+import { getXYKVolumeAssetTotalValue, useXYKTradeVolumes } from "api/volume"
 import { useMemo } from "react"
-import { BN_0, BN_10 } from "utils/constants"
-import { useDisplayPrice, useDisplayPrices } from "utils/displayAsset"
-import { normalizeId } from "utils/helpers"
-import { useRpcProvider } from "providers/rpcProvider"
+import { BN_0 } from "utils/constants"
+import { useDisplayPrices } from "utils/displayAsset"
+import { isNotNil } from "utils/helpers"
+import { useAssets } from "providers/assets"
 
-export function usePoolDetailsTradeVolume(assetId: u32) {
-  const { assets } = useRpcProvider()
-  const volumes = useTradeVolumes([assetId])
+export const useXYKPoolTradeVolumes = (poolsAddress: string[]) => {
+  const { getAsset } = useAssets()
+  const volumes = useXYKTradeVolumes(poolsAddress)
 
-  const assetTotalValue = useMemo(() => {
-    const volume = volumes.find(
-      (volume) => volume.data?.assetId === normalizeId(assetId),
-    )
+  const values = useMemo(() => {
+    return poolsAddress.map((poolAddress) => {
+      const volume = volumes.find(
+        (volume) => volume.data?.poolAddress === poolAddress,
+      )
 
-    if (!volume?.data) return
-    const sums = getVolumeAssetTotalValue(volume.data)
-    return sums?.[assetId.toString()]
-  }, [volumes, assetId])
+      const sums = getXYKVolumeAssetTotalValue(volume?.data)
 
-  const apiIds = useApiIds()
-  const assetMeta = assets.getAsset(assetId.toString())
-  const spotPrice = useDisplayPrice(assetId.toString())
+      if (!volume?.data || !sums) return undefined
 
-  const queries = [...volumes, apiIds, spotPrice]
-  const isLoading = queries.some((q) => q.isLoading)
+      return { poolAddress, assets: Object.keys(sums), sums }
+    })
+  }, [poolsAddress, volumes])
 
+  // Get all uniques assets in pools
+  const allAssetsInPools = [
+    ...new Set(
+      values.filter(isNotNil).reduce((acc, pool) => {
+        if (!pool) return acc
+        return [...acc, ...pool.assets]
+      }, [] as string[]),
+    ),
+  ]
+
+  const spotPrices = useDisplayPrices(allAssetsInPools)
+  const isLoading =
+    volumes.some((volume) => volume.isInitialLoading) ||
+    spotPrices.isInitialLoading
   const data = useMemo(() => {
-    let result = BN_0
-    if (!spotPrice.data || !assetTotalValue) return result
+    if (!volumes || !values || !spotPrices.data) return
 
-    const assetScale = assetTotalValue.dividedBy(BN_10.pow(assetMeta.decimals))
+    const data = values
+      .map((value) => {
+        if (!value) return undefined
+        const volume = value.assets.reduce((acc, asset) => {
+          const assetMeta = getAsset(asset)
+          const sum = value.sums[assetMeta?.id ?? ""]
 
-    result = assetScale.multipliedBy(spotPrice.data.spotPrice)
+          const spotPrice = spotPrices.data?.find(
+            (spotPrice) => spotPrice?.tokenIn === asset,
+          )?.spotPrice
 
-    return result
-  }, [assetTotalValue, spotPrice, assetMeta])
+          if (!sum || !spotPrice || !assetMeta) return acc
+          const sumScale = sum.shiftedBy(-assetMeta.decimals)
+
+          return acc.plus(sumScale.multipliedBy(spotPrice))
+        }, BN_0)
+
+        return { volume, poolAddress: value.poolAddress }
+      })
+      .filter(isNotNil)
+
+    return data
+  }, [getAsset, spotPrices, values, volumes])
 
   return { data, isLoading }
-}
-
-export function usePoolsDetailsTradeVolumes(assetIds: u32[]) {
-  const { assets } = useRpcProvider()
-  const volumes = useTradeVolumes(assetIds)
-  const spotPrices = useDisplayPrices(assetIds)
-
-  const queries = [...volumes, spotPrices]
-  const isLoading = queries.some((q) => q.isLoading)
-
-  const data = useMemo(() => {
-    return assetIds.reduce((acc, assetId) => {
-      const volume = volumes.find(
-        (volume) => volume.data?.assetId === normalizeId(assetId),
-      )
-      const assetMeta = assets.getAsset(assetId.toString())
-
-      const spotPrice = spotPrices.data?.find(
-        (sp) => sp?.tokenIn === normalizeId(assetId),
-      )?.spotPrice
-
-      const assetTotalValue = getVolumeAssetTotalValue(volume?.data)?.[
-        assetId.toString()
-      ]
-
-      if (!assetMeta || !spotPrice || !assetTotalValue) return acc
-
-      const assetScale = assetTotalValue.dividedBy(
-        BN_10.pow(assetMeta.decimals),
-      )
-
-      return acc.plus(assetScale.multipliedBy(spotPrice))
-    }, BN_0)
-  }, [assetIds, volumes, assets, spotPrices.data])
-
-  return { isLoading, data }
 }

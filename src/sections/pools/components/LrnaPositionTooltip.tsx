@@ -1,13 +1,10 @@
 import { Text } from "components/Typography/Text/Text"
-import { SInfoIcon } from "sections/pools/pool/Pool.styled"
 import { InfoTooltip } from "components/InfoTooltip/InfoTooltip"
-import { useTranslation } from "react-i18next"
-import { useSpotPrice } from "api/spotPrice"
-import { useApiIds } from "api/consts"
+import { Trans } from "react-i18next"
 import BigNumber from "bignumber.js"
-import { BN_0, BN_1 } from "utils/constants"
 import { u32 } from "@polkadot/types"
-import { useRpcProvider } from "providers/rpcProvider"
+import { SInfoIcon } from "components/InfoTooltip/InfoTooltip.styled"
+import { useAssets } from "providers/assets"
 
 type Props = {
   assetId?: string | u32
@@ -20,30 +17,36 @@ export const LrnaPositionTooltip = ({
   tokenPosition,
   lrnaPosition,
 }: Props) => {
-  const { t } = useTranslation()
-  const { assets } = useRpcProvider()
-  const apiIds = useApiIds()
-  const meta = assetId ? assets.getAsset(assetId.toString()) : undefined
+  const { getAsset } = useAssets()
 
-  const lrnaSpotPrice = useSpotPrice(apiIds.data?.hubId, assetId)
+  const meta = assetId ? getAsset(assetId.toString()) : undefined
 
-  const lrnaPositionPrice =
-    lrnaPosition?.multipliedBy(lrnaSpotPrice.data?.spotPrice ?? BN_1) ?? BN_0
+  if (!tokenPosition) return null
 
-  if (lrnaPositionPrice.isZero()) {
+  if (!lrnaPosition || lrnaPosition.isZero()) {
     return null
   }
+
+  const tKey =
+    lrnaPosition && !lrnaPosition.isNaN() && lrnaPosition.gt(0)
+      ? "wallet.assets.hydraPositions.data.valueLrna"
+      : "wallet.assets.hydraPositions.data.value"
 
   return (
     <InfoTooltip
       text={
         <Text fs={11} fw={500}>
-          {t("pools.lrnaPosition.tooltip")}
-          <br />
-          {t("value.tokenWithSymbol", {
-            value: lrnaPositionPrice.plus(tokenPosition ?? BN_0),
-            symbol: meta?.symbol,
-          })}
+          <Trans
+            i18nKey={tKey}
+            tOptions={{
+              value: tokenPosition,
+              symbol: meta?.symbol,
+              lrna: lrnaPosition,
+              type: "token",
+            }}
+          >
+            <br sx={{ display: ["initial", "none"] }} />
+          </Trans>
         </Text>
       }
     >

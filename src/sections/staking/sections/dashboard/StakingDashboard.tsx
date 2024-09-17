@@ -1,11 +1,13 @@
 import { StakingGuide } from "./components/StakingGuide/StakingGuide"
 import { AvailableRewards } from "./components/AvailableRewards/AvailableRewards"
 import { StakingInputSection } from "./components/StakingInputSection/StakingInputSection"
-import { useAccountStore } from "state/store"
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
 import { Stats } from "./components/Stats/Stats"
 import { Referenda, ReferendaWrapper } from "./components/Referenda/Referenda"
 import { useStakeData } from "sections/staking/StakingPage.utils"
 import { useRpcProvider } from "providers/rpcProvider"
+import { useMedia } from "react-use"
+import { theme } from "theme"
 
 export const StakingDashboard = () => {
   const { isLoaded } = useRpcProvider()
@@ -16,11 +18,13 @@ export const StakingDashboard = () => {
 }
 
 export const StakingSkeleton = () => {
+  const isDesktop = useMedia(theme.viewport.gte.sm)
+
   return (
     <div sx={{ flex: ["column-reverse", "row"], gap: 30, flexWrap: "wrap" }}>
       <div sx={{ flex: "column", gap: 28 }} css={{ flex: 3 }}>
         <Stats loading />
-        <Referenda loading />
+        {!isDesktop && <Referenda loading />}
       </div>
 
       <div
@@ -28,14 +32,16 @@ export const StakingSkeleton = () => {
         css={{ flex: 2 }}
       >
         <StakingInputSection loading />
+        {isDesktop && <Referenda loading />}
       </div>
     </div>
   )
 }
 
 export const StakingData = () => {
-  const { account } = useAccountStore()
+  const { account } = useAccount()
   const staking = useStakeData()
+  const isDesktop = useMedia(theme.viewport.gte.sm)
 
   const showGuide = staking.data && !staking.data.stakePosition
 
@@ -43,8 +49,9 @@ export const StakingData = () => {
     <div sx={{ flex: ["column-reverse", "row"], gap: 30 }}>
       <div sx={{ flex: "column", gap: 28 }} css={{ flex: 3 }}>
         {showGuide && <StakingGuide />}
+        {account && staking.data?.positionId && <AvailableRewards />}
         <Stats data={staking.data} loading={staking.isLoading} />
-        <ReferendaWrapper />
+        {!isDesktop && <ReferendaWrapper />}
       </div>
 
       <div
@@ -52,7 +59,7 @@ export const StakingData = () => {
         css={{ flex: 2 }}
       >
         <StakingInputSection data={staking.data} loading={staking.isLoading} />
-        {account && staking.data?.positionId && <AvailableRewards />}
+        {isDesktop && <ReferendaWrapper />}
       </div>
     </div>
   )

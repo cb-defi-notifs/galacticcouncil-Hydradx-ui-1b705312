@@ -1,75 +1,63 @@
 import { useTranslation } from "react-i18next"
-import { SIcon } from "sections/wallet/assets/table/data/WalletAssetsTableData.styled"
-import { AssetLogo } from "components/AssetIcon/AssetIcon"
+import { MultipleAssetLogo } from "components/AssetIcon/AssetIcon"
 import { Text } from "components/Typography/Text/Text"
-import { theme } from "theme"
-import { MultipleIcons } from "components/MultipleIcons/MultipleIcons"
-import { useRpcProvider } from "providers/rpcProvider"
+import { useExternalTokenMeta } from "sections/wallet/addToken/AddToken.utils"
+import { useAssets } from "providers/assets"
 
 export const AssetTableName = ({
   large,
-  symbol,
-  name,
   isPaymentFee,
   id,
 }: {
-  symbol: string
-  name: string
   large?: boolean
   isPaymentFee?: boolean
   id: string
 }) => {
   const { t } = useTranslation()
-  const { assets } = useRpcProvider()
-  const asset = assets.getAsset(id)
+  const { getAsset } = useAssets()
 
-  const iconIds = assets.isStableSwap(asset) ? asset.assets : asset.id
+  const asset = getAsset(id)
+  const getExternalMeta = useExternalTokenMeta()
+  const meta = asset?.isExternal ? getExternalMeta(id) : asset
+
+  if (!asset || !meta) return null
 
   return (
-    <div>
-      <div sx={{ flex: "row", gap: 8, align: "center" }}>
-        {typeof iconIds === "string" ? (
-          <SIcon large={large}>
-            <AssetLogo id={iconIds} />
-          </SIcon>
-        ) : (
-          <MultipleIcons
-            icons={iconIds.map((asset) => ({
-              icon: (
-                <SIcon large={large}>
-                  <AssetLogo id={asset} />
-                </SIcon>
-              ),
-            }))}
-          />
-        )}
+    <div sx={{ width: ["max-content", "inherit"] }}>
+      <div
+        sx={{ flex: "row", gap: 8, align: "center", width: "fit-content" }}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+      >
+        <MultipleAssetLogo size={[large ? 28 : 26, 26]} iconId={meta.iconId} />
 
-        <div sx={{ flex: "column", width: "100%", gap: [0, 4] }}>
+        <div sx={{ flex: "column", width: "100%", gap: [0, 2] }}>
           <Text
-            fs={[large ? 18 : 14, 16]}
-            lh={[large ? 16 : 23, 16]}
-            fw={700}
+            fs={large ? 18 : 14}
+            lh={large ? 16 : 14}
+            font="GeistMedium"
             color="white"
           >
-            {symbol}
+            {meta.symbol}
           </Text>
           <Text
-            fs={[large ? 13 : 12, 13]}
-            lh={[large ? 17 : 14, 13]}
-            fw={500}
-            css={{ color: `rgba(${theme.rgbColors.paleBlue}, 0.61)` }}
+            fs={large ? 14 : 12}
+            lh={large ? 17 : 12}
+            sx={{ display: !large ? ["none", "block"] : undefined }}
+            color="whiteish500"
           >
-            {name}
+            {asset.name}
           </Text>
         </div>
       </div>
       {isPaymentFee && (
         <Text
-          fs={9}
-          fw={700}
+          fs={10}
           sx={{
             mt: 4,
-            ml: large ? 50 : [32, 40],
+            ml: large ? 30 : [32, 34],
           }}
           color="brightBlue300"
           tTransform="uppercase"

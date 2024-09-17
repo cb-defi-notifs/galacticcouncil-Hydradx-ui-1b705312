@@ -18,6 +18,7 @@ import { Text } from "components/Typography/Text/Text"
 import { WalletTransferModal } from "sections/wallet/transfer/WalletTransferModal"
 import { Switch } from "components/Switch/Switch"
 import { useTranslation } from "react-i18next"
+import { BondTableMobileDrawer } from "./BondTableMobileDrawer"
 
 type Props = {
   title: string
@@ -37,7 +38,7 @@ export const BondsTable = ({
   setAllAssets,
 }: Props) => {
   const { t } = useTranslation()
-  const [, setRow] = useState<BondTableItem | undefined>(undefined)
+  const [row, setRow] = useState<BondTableItem | undefined>(undefined)
   const [transferAsset, setTransferAsset] = useState<string | null>(null)
 
   const isDesktop = useMedia(theme.viewport.gte.sm)
@@ -50,18 +51,12 @@ export const BondsTable = ({
 
   return (
     <>
-      <TableContainer
-        css={
-          showTransfer
-            ? undefined
-            : { backgroundColor: `rgba(${theme.rgbColors.bg}, 0.4)` }
-        }
-      >
+      <TableContainer>
         <TableTitle>
           <Text
             fs={[16, 20]}
             lh={[20, 26]}
-            css={{ fontFamily: "FontOver" }}
+            font="GeistMono"
             fw={500}
             color="white"
           >
@@ -71,7 +66,6 @@ export const BondsTable = ({
             <Switch
               value={allAssets}
               onCheckedChange={(value) => setAllAssets(value)}
-              size="small"
               name="showAll"
               label={t("bonds.table.switcher")}
             />
@@ -80,7 +74,7 @@ export const BondsTable = ({
         <Table>
           <TableHeaderContent>
             {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
+              <TableRow key={hg.id} header>
                 {hg.headers.map((header) => (
                   <TableHeader key={header.id}>
                     {flexRender(
@@ -96,7 +90,6 @@ export const BondsTable = ({
             {table.getRowModel().rows.map((row, i) => (
               <Fragment key={row.id}>
                 <TableRow
-                  isOdd={!(i % 2)}
                   onClick={() => {
                     isDesktop && row.toggleSelected()
                     !isDesktop && setRow(row.original)
@@ -114,7 +107,7 @@ export const BondsTable = ({
                 {row.getIsSelected() &&
                   showTransactions &&
                   row.original.events.length && (
-                    <TableRow isSub={true}>
+                    <TableRow>
                       <td colSpan={table.getAllColumns().length}>
                         <Transactions
                           data={row.original.events}
@@ -134,6 +127,18 @@ export const BondsTable = ({
           open
           initialAsset={transferAsset}
           onClose={() => setTransferAsset(null)}
+        />
+      )}
+
+      {!isDesktop && row && (
+        <BondTableMobileDrawer
+          data={row}
+          onClose={() => setRow(undefined)}
+          config={{
+            showTransactions,
+            showTransfer,
+            onTransfer: setTransferAsset,
+          }}
         />
       )}
     </>

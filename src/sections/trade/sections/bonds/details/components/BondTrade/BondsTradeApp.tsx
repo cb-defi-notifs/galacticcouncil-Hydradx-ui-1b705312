@@ -5,15 +5,17 @@ import type { TxInfo } from "@galacticcouncil/apps"
 import * as React from "react"
 import * as Apps from "@galacticcouncil/apps"
 import { createComponent, EventName } from "@lit-labs/react"
-import { useAccountStore, useStore } from "state/store"
+import { useStore } from "state/store"
 import { z } from "zod"
 import { MakeGenerics, useSearch } from "@tanstack/react-location"
-import { useProviderRpcUrlStore } from "api/provider"
-import { PoolType } from "@galacticcouncil/sdk"
+import { useActiveProvider } from "api/provider"
 import { useRpcProvider } from "providers/rpcProvider"
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
+import { useDisplayAssetStore } from "utils/displayAsset"
+import { useAssets } from "providers/assets"
 
 export const BondsApp = createComponent({
-  tagName: "gc-bonds-app",
+  tagName: "gc-bonds",
   elementClass: Apps.BondsApp,
   react: React,
   events: {
@@ -37,7 +39,6 @@ type SearchGenerics = MakeGenerics<{
   Search: z.infer<typeof BondsAppSearch>
 }>
 
-const squidUrl = import.meta.env.VITE_SQUID_URL
 const stableCoinAssetId = import.meta.env.VITE_STABLECOIN_ASSET_ID
 
 export const BondsTrade = ({
@@ -47,12 +48,13 @@ export const BondsTrade = ({
   bondId?: string
   setBondId: (bondId: string) => void
 }) => {
-  const { api, assets } = useRpcProvider()
-  const { account } = useAccountStore()
+  const { api } = useRpcProvider()
+  const { getAssets } = useAssets()
+  const { account } = useAccount()
   const { createTransaction } = useStore()
+  const { stableCoinId } = useDisplayAssetStore()
 
-  const preference = useProviderRpcUrlStore()
-  const rpcUrl = preference.rpcUrl ?? import.meta.env.VITE_PROVIDER_URL
+  const activeProvider = useActiveProvider()
 
   const rawSearch = useSearch<SearchGenerics>()
   const search = BondsAppSearch.safeParse(rawSearch)
@@ -61,7 +63,7 @@ export const BondsTrade = ({
     const assetIn = e.detail.assetIn.toString() as string
     const assetOut = e.detail.assetOut.toString() as string
 
-    const bond = assets.getAssets([assetIn, assetOut]).find(assets.isBond)
+    const bond = getAssets([assetIn, assetOut]).find((asset) => asset?.isBond)
 
     if (bond && bondId !== bond.id) {
       setBondId(bond.id)
@@ -107,6 +109,7 @@ export const BondsTrade = ({
   return (
     <SContainer>
       <BondsApp
+        key={activeProvider?.url}
         ref={(r) => {
           if (r) {
             r.setAttribute("chart", "")
@@ -114,13 +117,12 @@ export const BondsTrade = ({
         }}
         assetIn={search.success ? search.data.assetIn : undefined}
         assetOut={search.success ? search.data.assetOut : undefined}
-        apiAddress={rpcUrl}
-        pools={[PoolType.Omni, PoolType.LBP].join(",")}
-        stableCoinAssetId={stableCoinAssetId}
+        apiAddress={activeProvider?.url}
+        stableCoinAssetId={stableCoinId ?? stableCoinAssetId}
         accountName={account?.name}
         accountProvider={account?.provider}
         accountAddress={account?.address}
-        squidUrl={squidUrl}
+        squidUrl={activeProvider?.squidUrl}
         onTxNew={(e) => handleSubmit(e)}
         onQueryUpdate={(e) => handleQueryUpdate(e)}
       />

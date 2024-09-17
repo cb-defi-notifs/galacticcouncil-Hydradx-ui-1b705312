@@ -7,7 +7,7 @@ import {
   VisibilityState,
 } from "@tanstack/react-table"
 import { useBestNumber } from "api/chain"
-import { useAccountDepositIds, useAllDeposits } from "api/deposits"
+import { useAccountPositions } from "api/deposits"
 import BN from "bignumber.js"
 import { DollarAssetValue } from "components/DollarAssetValue/DollarAssetValue"
 import { Text } from "components/Typography/Text/Text"
@@ -15,21 +15,31 @@ import { isAfter } from "date-fns"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMedia } from "react-use"
-import { useAllUserDepositShare } from "sections/pools/farms/position/FarmingPosition.utils"
-import { useAccountStore } from "state/store"
+import { useAllFarmDeposits } from "sections/pools/farms/position/FarmingPosition.utils"
 import { theme } from "theme"
 import { getFloatingPointAmount } from "utils/balance"
 import { getEnteredDate } from "utils/block"
-import { BN_0, BN_NAN } from "utils/constants"
-import { WalletAssetsHydraPositionsData } from "sections/wallet/assets/hydraPositions/data/WalletAssetsHydraPositionsData"
+import { BN_0 } from "utils/constants"
 import { DisplayValue } from "components/DisplayValue/DisplayValue"
-import { LrnaPositionTooltip } from "sections/pools/components/LrnaPositionTooltip"
 import { AssetTableName } from "components/AssetTableName/AssetTableName"
-import { useRpcProvider } from "providers/rpcProvider"
+import { arraySearch, isNotNil } from "utils/helpers"
+import { WalletAssetsHydraPositionsDetails } from "sections/wallet/assets/hydraPositions/details/WalletAssetsHydraPositionsDetails"
+import { ButtonTransparent } from "components/Button/Button"
+import { Icon } from "components/Icon/Icon"
+import ChevronRightIcon from "assets/icons/ChevronRight.svg?react"
+import { TLPData } from "utils/omnipool"
+import { TableAction } from "components/Table/Table"
+import TransferIcon from "assets/icons/TransferIcon.svg?react"
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
+import { useAssets } from "providers/assets"
 
-export const useFarmingPositionsTable = (data: FarmingPositionsTableData[]) => {
+export const useFarmingPositionsTable = (
+  data: FarmingTablePosition[],
+  actions: { onTransfer: (position: FarmingTablePosition) => void },
+) => {
   const { t } = useTranslation()
-  const { accessor } = createColumnHelper<FarmingPositionsTableData>()
+  const { account } = useAccount()
+  const { accessor, display } = createColumnHelper<FarmingTablePosition>()
   const [sorting, onSortingChange] = useState<SortingState>([])
 
   const isDesktop = useMedia(theme.viewport.gte.sm)
@@ -38,12 +48,13 @@ export const useFarmingPositionsTable = (data: FarmingPositionsTableData[]) => {
     date: isDesktop,
     shares: isDesktop,
     position: true,
+    actions: isDesktop,
   }
 
   const columns = useMemo(
     () => [
       accessor("symbol", {
-        id: "name",
+        id: "symbol",
         header: isDesktop
           ? t("wallet.assets.farmingPositions.header.name")
           : t("selectAssets.asset"),
@@ -58,71 +69,95 @@ export const useFarmingPositionsTable = (data: FarmingPositionsTableData[]) => {
         sortingFn: (a, b) =>
           isAfter(a.original.date, b.original.date) ? 1 : -1,
         cell: ({ row }) => (
-          <Text fs={16} fw={500} color="white">
+          <Text fs={14} fw={500} color="white">
             {t("wallet.assets.farmingPositions.data.date", {
               date: row.original.date,
             })}
           </Text>
         ),
       }),
-      accessor("position.providedAmount", {
-        id: "initial",
+      accessor("shares", {
+        id: "shares",
         header: t("wallet.assets.farmingPositions.header.initial"),
         sortingFn: (a, b) => (a.original.shares.gt(b.original.shares) ? 1 : -1),
-        cell: ({ row }) => (
-          <>
-            <Text fs={16} fw={500} color="white">
-              {t("value.token", {
-                value: row.original.position.providedAmount,
-              })}
+        cell: ({ row }) => {
+          return isXYKPosition(row.original.position) ? (
+            <Text fs={14} fw={500} color="white">
+              -
             </Text>
-            <DollarAssetValue
-              value={row.original.position.providedAmountDisplay}
-              wrapper={(children) => (
-                <Text fs={[11, 12]} lh={[14, 16]} color="whiteish500">
-                  {children}
-                </Text>
-              )}
-            >
-              <DisplayValue
-                value={row.original.position.providedAmountDisplay}
-              />
-            </DollarAssetValue>
-          </>
-        ),
+          ) : (
+            <>
+              <Text fs={14} fw={500} color="white">
+                {t("value.token", {
+                  value: row.original.position.amountShifted,
+                })}
+              </Text>
+              <DollarAssetValue
+                value={row.original.position.amountDisplay}
+                wrapper={(children) => (
+                  <Text fs={[12, 13]} lh={[14, 16]} color="whiteish500">
+                    {children}
+                  </Text>
+                )}
+              >
+                <DisplayValue value={row.original.position.amountDisplay} />
+              </DollarAssetValue>
+            </>
+          )
+        },
       }),
       accessor("position", {
-        id: "value",
+        id: "position",
         header: t("wallet.assets.farmingPositions.header.value"),
         sortingFn: (a, b) =>
           a.original.position.valueDisplay.gt(b.original.position.valueDisplay)
             ? 1
             : -1,
-        cell: ({ row }) => (
-          <div sx={{ flex: "column", align: ["end", "start"], gap: 2 }}>
-            <div sx={{ flex: "row", gap: 4 }}>
-              <WalletAssetsHydraPositionsData
-                symbol={row.original.position.symbol}
-                value={row.original.position.value}
-                lrna={row.original.position.lrna}
-              />
-              <LrnaPositionTooltip
-                lrnaPosition={row.original.position.lrna}
-                tokenPosition={row.original.position.value}
-                assetId={row.original.assetId}
-              />
-            </div>
-            <DollarAssetValue
-              value={row.original.position.valueDisplay}
-              wrapper={(children) => (
-                <Text fs={[11, 12]} lh={[14, 16]} color="whiteish500">
-                  {children}
-                </Text>
-              )}
+        cell: ({ row }) => {
+          const position = row.original.position
+          const isXYK = isXYKPosition(position)
+
+          return (
+            <div
+              sx={{
+                flex: "row",
+                gap: 1,
+                align: "center",
+                justify: ["end", "start"],
+                textAlign: "center",
+              }}
             >
-              <DisplayValue value={row.original.position.valueDisplay} />
-            </DollarAssetValue>
-          </div>
+              <WalletAssetsHydraPositionsDetails
+                assetId={row.original.assetId}
+                lrna={isXYK ? undefined : position.lrnaShifted}
+                amount={isXYK ? undefined : position.valueShifted}
+                amountPair={isXYK ? position.balances : undefined}
+                amountDisplay={position.valueDisplay}
+              />
+              {!isDesktop && (
+                <ButtonTransparent>
+                  <Icon
+                    sx={{ color: "darkBlue300" }}
+                    icon={<ChevronRightIcon />}
+                  />
+                </ButtonTransparent>
+              )}
+            </div>
+          )
+        },
+      }),
+      display({
+        id: "actions",
+        size: 38,
+        cell: ({ row }) => (
+          <TableAction
+            icon={<TransferIcon />}
+            onClick={() => actions.onTransfer(row.original)}
+            sx={{ mr: 16 }}
+            disabled={account?.isExternalWalletConnected}
+          >
+            {t("transfer")}
+          </TableAction>
         ),
       }),
     ],
@@ -141,102 +176,140 @@ export const useFarmingPositionsTable = (data: FarmingPositionsTableData[]) => {
   })
 }
 
-export const useFarmingPositionsData = () => {
-  const { assets } = useRpcProvider()
-  const { account } = useAccountStore()
-  const allDeposits = useAllDeposits()
-  const accountDepositIds = useAccountDepositIds(account?.address)
-  const accountDepositsShare = useAllUserDepositShare()
-
-  const accountDeposits = useMemo(
-    () =>
-      allDeposits.data?.filter(
-        (deposit) =>
-          accountDepositIds.data?.some(
-            (d) => d.instanceId.toString() === deposit.id.toString(),
-          ),
-      ),
-    [allDeposits.data, accountDepositIds.data],
-  )
+export const useFarmingPositionsData = ({
+  search,
+}: {
+  search?: string
+} = {}) => {
+  const { getShareTokenByAddress, getAsset } = useAssets()
+  const { omnipoolDeposits = [], xykDeposits = [] } =
+    useAccountPositions().data ?? {}
+  const { omnipool, xyk } = useAllFarmDeposits()
 
   const bestNumber = useBestNumber()
 
-  const queries = [
-    allDeposits,
-    accountDepositIds,
-    accountDepositsShare,
-    bestNumber,
-  ]
+  const queries = [bestNumber]
   const isLoading = queries.some((q) => q.isLoading)
 
   const data = useMemo(() => {
-    if (!accountDeposits || !accountDepositsShare.data || !bestNumber.data)
-      return []
+    if (!omnipoolDeposits || !bestNumber.data) return []
 
-    const rows: FarmingPositionsTableData[] = accountDeposits.map((deposit) => {
-      const id = deposit.id.toString()
-      const assetId = deposit.deposit.ammPoolId.toString()
-      const meta = assets.getAsset(assetId)
-      const latestEnteredAtBlock = deposit.deposit.yieldFarmEntries.reduce(
-        (acc, curr) =>
-          acc.lt(curr.enteredAt.toBigNumber())
-            ? curr.enteredAt.toBigNumber()
-            : acc,
-        BN_0,
+    const rows = [...omnipoolDeposits, ...xykDeposits]
+      .map((deposit) => {
+        const depositId = deposit.id
+        const isXyk = deposit.isXyk
+        const poolId = deposit.data.ammPoolId.toString()
+
+        const meta = isXyk ? getShareTokenByAddress(poolId) : getAsset(poolId)
+
+        if (!meta) return undefined
+
+        const { symbol, decimals, name, id } = meta
+        const latestEnteredAtBlock = deposit.data.yieldFarmEntries.reduce(
+          (acc, curr) =>
+            acc.lt(curr.enteredAt.toBigNumber())
+              ? curr.enteredAt.toBigNumber()
+              : acc,
+          BN_0,
+        )
+
+        const date = getEnteredDate(
+          latestEnteredAtBlock,
+          bestNumber.data.relaychainBlockNumber.toBigNumber(),
+        )
+        const shares = getFloatingPointAmount(
+          deposit.data.shares.toBigNumber(),
+          decimals,
+        )
+
+        let position: XYKPosition | TLPData
+        if (isXyk) {
+          const values = xyk[meta.id]?.find(
+            (value) => value.depositId === deposit.id,
+          )
+
+          if (values?.amountUSD) {
+            const { assetA, assetB, amountUSD, depositId, assetId } = values
+
+            position = {
+              balances: [
+                {
+                  id: assetA.id,
+                  amount: assetA.amount,
+                  symbol: assetA.symbol,
+                },
+                {
+                  id: assetB.id,
+                  amount: assetB.amount,
+                  symbol: assetB.symbol,
+                },
+              ],
+              valueDisplay: amountUSD,
+              id: depositId,
+              assetId,
+            }
+          } else {
+            return undefined
+          }
+        } else {
+          const omnipoolDeposit = omnipool[poolId]?.find(
+            (d) => d.depositId?.toString() === deposit.id,
+          )
+
+          if (omnipoolDeposit) {
+            position = omnipoolDeposit
+          } else {
+            return undefined
+          }
+        }
+
+        return {
+          id: depositId,
+          symbol,
+          name,
+          date,
+          shares,
+          position,
+          assetId: id,
+        }
+      })
+      .filter(isNotNil)
+      .sort((a, b) =>
+        b.position.valueDisplay.minus(a.position.valueDisplay).toNumber(),
       )
 
-      const symbol = meta.symbol
-      const name = meta.name
-      const date = getEnteredDate(
-        latestEnteredAtBlock,
-        bestNumber.data.relaychainBlockNumber.toBigNumber(),
-      )
-      const shares = getFloatingPointAmount(
-        deposit.deposit.shares.toBigNumber(),
-        meta.decimals,
-      )
-      const position = accountDepositsShare.data[assetId]?.find(
-        (d) => d.depositId?.toString() === deposit.id.toString(),
-      ) ?? {
-        symbol,
-        value: BN_NAN,
-        valueDisplay: BN_NAN,
-        lrna: BN_NAN,
-        amount: BN_NAN,
-        providedAmount: BN_NAN,
-        providedAmountDisplay: BN_NAN,
-      }
-
-      return {
-        id,
-        symbol,
-        name,
-        date,
-        shares,
-        position,
-        assetId,
-      }
-    })
-
-    return rows
-  }, [accountDeposits, accountDepositsShare.data, assets, bestNumber.data])
+    return search ? arraySearch(rows, search, ["symbol", "name"]) : rows
+  }, [
+    omnipoolDeposits,
+    bestNumber.data,
+    xykDeposits,
+    search,
+    getShareTokenByAddress,
+    getAsset,
+    xyk,
+    omnipool,
+  ])
 
   return { data, isLoading }
 }
 
-export type FarmingPositionsTableData = {
+export const isXYKPosition = (
+  position: XYKPosition | TLPData,
+): position is XYKPosition => !!(position as XYKPosition).balances
+
+export type XYKPosition = {
+  valueDisplay: BN
+  balances: { amount: BN; symbol: string; id: string }[]
+  id: string
+  assetId: string
+}
+
+export type FarmingTablePosition = {
   id: string
   assetId: string
   symbol: string
   name: string
   date: Date
   shares: BN
-  position: {
-    symbol: string
-    value: BN
-    valueDisplay: BN
-    lrna: BN
-    providedAmount: BN
-    providedAmountDisplay: BN
-  }
+  position: XYKPosition | TLPData
 }

@@ -2,64 +2,58 @@ import { AddressBook } from "components/AddressBook/AddressBook"
 import { Modal } from "components/Modal/Modal"
 import { useModalPagination } from "components/Modal/Modal.utils"
 import { ModalContents } from "components/Modal/contents/ModalContents"
-import { PillSwitch } from "components/PillSwitch/PillSwitch"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { useTranslation } from "react-i18next"
 import { useMedia } from "react-use"
 import { AssetsModalContent } from "sections/assets/AssetsModal"
-import { WalletTransferSectionCrosschain } from "sections/wallet/transfer/crosschain/WalletTransferSectionCrosschain"
 import { WalletTransferSectionOnchain } from "sections/wallet/transfer/onchain/WalletTransferSectionOnchain"
 import { theme } from "theme"
-import { CROSSCHAINS } from "./crosschain/WalletTransferSectionCrosschain.utils"
+import { useTransferZodSchema } from "./onchain/WalletTransferSectionOnchain.utils"
+import { zodResolver } from "@hookform/resolvers/zod"
+
+enum ModalPage {
+  Transfer,
+  Assets,
+  AddressBook,
+}
 
 export function WalletTransferModal(props: {
   open: boolean
   onClose: () => void
   initialAsset: string
+  initialRecipient?: string
+  staticAsset?: boolean
 }) {
   const { t } = useTranslation()
-  const [active, setActive] = useState<
-    (typeof CROSSCHAINS)[number] | undefined
-  >()
+
   const [asset, setAsset] = useState(props.initialAsset)
 
-  const form = useForm<{ dest: string; amount: string }>({})
+  const zodSchema = useTransferZodSchema(asset)
+
+  const form = useForm<{ dest: string; amount: string }>({
+    ...(props.initialRecipient
+      ? {
+          values: { dest: props.initialRecipient, amount: "" },
+        }
+      : {}),
+    resolver: zodSchema ? zodResolver(zodSchema) : undefined,
+  })
 
   const isDesktop = useMedia(theme.viewport.gte.sm)
   const { page, direction, paginateTo } = useModalPagination()
 
-  const openOnChain = () => paginateTo(0)
-  const openAssets = () => paginateTo(2)
-  const openAddressBook = () => paginateTo(3)
+  const openTransfer = () => paginateTo(ModalPage.Transfer)
+  const openAssets = () => paginateTo(ModalPage.Assets)
+  const openAddressBook = () => paginateTo(ModalPage.AddressBook)
 
   return (
-    <Modal
-      open={props.open}
-      onClose={props.onClose}
-      disableClose={!isDesktop}
-      topContent={
-        <PillSwitch
-          options={[
-            {
-              value: 0,
-              label: t("wallet.assets.transfer.switch.onchain"),
-            },
-            {
-              value: 1,
-              label: t("wallet.assets.transfer.switch.bridge"),
-            },
-          ]}
-          value={page === 1 ? 1 : 0}
-          onChange={paginateTo}
-        />
-      }
-    >
+    <Modal open={props.open} onClose={props.onClose} disableClose={!isDesktop}>
       <ModalContents
         page={page}
         direction={direction}
         onClose={props.onClose}
-        onBack={openOnChain}
+        onBack={openTransfer}
         disableAnimation
         contents={[
           {
@@ -71,32 +65,22 @@ export function WalletTransferModal(props: {
                 openAssets={openAssets}
                 openAddressBook={openAddressBook}
                 onClose={props.onClose}
-              />
-            ),
-          },
-          {
-            title: active
-              ? undefined
-              : t("wallet.assets.transfer.bridge.title"),
-            hideBack: true,
-            content: (
-              <WalletTransferSectionCrosschain
-                onClose={props.onClose}
-                active={active}
-                setActive={setActive}
+                staticAsset={!!props.staticAsset}
               />
             ),
           },
           {
             title: t("selectAsset.title"),
-            headerVariant: "FontOver",
+            headerVariant: "GeistMono",
             noPadding: true,
             content: (
               <AssetsModalContent
+                withExternal
                 withBonds
+                defaultSelectedAsssetId={asset}
                 onSelect={(a) => {
                   setAsset(a.id)
-                  openOnChain()
+                  openTransfer()
                 }}
               />
             ),
@@ -107,7 +91,7 @@ export function WalletTransferModal(props: {
               <AddressBook
                 onSelect={(address) => {
                   form.setValue("dest", address)
-                  openOnChain()
+                  openTransfer()
                 }}
               />
             ),

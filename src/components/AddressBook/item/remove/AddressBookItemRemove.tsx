@@ -6,14 +6,14 @@ import { Text } from "components/Typography/Text/Text"
 import { useTranslation } from "react-i18next"
 import { SButtons, SContainer } from "./AddressBookItemRemove.styled"
 
-type Props = { address: string; onDone: () => void }
+type Props = { id: string; onDone: () => void }
 
-export const AddressBookItemRemove = ({ address, onDone }: Props) => {
+export const AddressBookItemRemove = ({ id, onDone }: Props) => {
   const { t } = useTranslation()
   const { remove } = useAddressStore()
 
   const onRemove = () => {
-    remove(address)
+    remove(id)
     onDone()
   }
 
@@ -21,7 +21,7 @@ export const AddressBookItemRemove = ({ address, onDone }: Props) => {
     <SContainer>
       <IconRemove width={24} height={24} />
       <Spacer size={12} />
-      <Text font="FontOver" fs={24} lh={32}>
+      <Text font="GeistMono" fs={24} lh={32}>
         {t("addressbook.remove.title")}
       </Text>
       <Spacer size={4} />

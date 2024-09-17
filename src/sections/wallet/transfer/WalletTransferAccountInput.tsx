@@ -1,4 +1,3 @@
-import { decodeAddress, encodeAddress } from "@polkadot/util-crypto"
 import GuestIcon from "assets/icons/GuestIcon.svg?react"
 import IconWalletSmall from "assets/icons/IconWalletSmall.svg?react"
 import { AccountAvatar } from "components/AccountAvatar/AccountAvatar"
@@ -13,6 +12,8 @@ import {
   SContainer,
   SIconContainer,
 } from "./WalletTransferAccountInput.styled"
+import { safeConvertAddressSS58 } from "utils/formatting"
+import { safeConvertAddressH160 } from "utils/evm"
 
 interface Props {
   name: string
@@ -24,36 +25,40 @@ interface Props {
   placeholder?: string
   rightIcon?: ReactNode
   openAddressBook?: () => void
+  className?: string
 }
 
 export const WalletTransferAccountInput = (props: Props) => {
   const { t } = useTranslation()
 
-  let validAddress: string | null = null
   const isDisabled = !props.onChange
-  try {
-    validAddress = encodeAddress(decodeAddress(props.value))
-  } catch {}
+
+  const validAddress = props.value
+    ? safeConvertAddressSS58(props.value, 0) ||
+      safeConvertAddressH160(props.value)
+    : ""
 
   return (
     <>
-      <SContainer disabled={isDisabled} id={props.name} error={!!props.error}>
-        <Text fs={12} color="basic500" tTransform={"uppercase"} sx={{ mb: 8 }}>
+      <SContainer
+        disabled={isDisabled}
+        htmlFor={props.name}
+        error={!!props.error}
+        className={props.className}
+      >
+        <Text fs={11} color="basic500" tTransform={"uppercase"} sx={{ mb: 8 }}>
           {props.label}
         </Text>
-        <div sx={{ flex: "row", justify: "space-between", align: "center" }}>
-          {validAddress ? (
-            <AccountAvatar
-              address={validAddress}
-              size={35}
-              theme="hydra"
-              css={{ padding: 5 }}
-            />
-          ) : (
-            <SIconContainer>
-              <GuestIcon width={35} height={35} />
-            </SIconContainer>
-          )}
+        <div sx={{ flex: "row", align: "center" }}>
+          <div>
+            {validAddress ? (
+              <AccountAvatar address={validAddress} size={30} />
+            ) : (
+              <SIconContainer>
+                <GuestIcon width={30} height={30} />
+              </SIconContainer>
+            )}
+          </div>
 
           {props.openAddressBook && (
             <SAddressBookButton type="button" onClick={props.openAddressBook}>

@@ -1,6 +1,6 @@
 import { Portal, Root } from "@radix-ui/react-dialog"
 import { BackdropVariant } from "components/Backdrop/Backdrop"
-import { ReactNode, useMemo } from "react"
+import { ReactNode, useMemo, useState } from "react"
 import {
   SBottomContent,
   SContainer,
@@ -42,6 +42,9 @@ export const Modal = ({
   const hasContentProps = Object.values(contentProps).some(
     (val) => val !== undefined,
   )
+
+  const [isAnimating, setIsAnimating] = useState(true)
+
   const hasTopContent = topContent !== undefined
 
   const content = useMemo(() => {
@@ -49,7 +52,6 @@ export const Modal = ({
 
     return (
       <ModalContents
-        className={className}
         page={0}
         direction={0}
         onClose={onClose}
@@ -58,30 +60,39 @@ export const Modal = ({
         contents={[{ content: children, ...contentProps }]}
       />
     )
-  }, [hasContentProps, children, className, onClose, onBack, contentProps])
+  }, [hasContentProps, children, onClose, onBack, contentProps])
 
   return (
     <Root open={open}>
       <Portal>
-        <SOverlay variant={backdrop} />
-        <SContainer
-          onEscapeKeyDown={!disableClose ? onClose : undefined}
-          onInteractOutside={
-            disableClose || disableCloseOutside || hasTopContent
-              ? undefined
-              : onClose
-          }
+        <SOverlay
+          variant={backdrop}
+          onAnimationEnd={() => setIsAnimating(false)}
+          className={className}
+          css={{ overflow: isAnimating ? "hidden" : undefined }}
         >
-          <STopContent>{topContent}</STopContent>
-          <SContent
-            isDrawer={isDrawer}
-            hasTopContent={hasTopContent}
-            className={!hasContentProps ? className : undefined}
+          <SContainer
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onEscapeKeyDown={!disableClose ? onClose : undefined}
+            onInteractOutside={
+              disableClose || disableCloseOutside || hasTopContent
+                ? undefined
+                : onClose
+            }
           >
-            <SModalSection>{content}</SModalSection>
-            {bottomContent && <SBottomContent>{bottomContent}</SBottomContent>}
-          </SContent>
-        </SContainer>
+            <STopContent>{topContent}</STopContent>
+            <SContent
+              isDrawer={isDrawer}
+              hasTopContent={hasTopContent}
+              className={!hasContentProps ? className : undefined}
+            >
+              <SModalSection>{content}</SModalSection>
+              {bottomContent && (
+                <SBottomContent>{bottomContent}</SBottomContent>
+              )}
+            </SContent>
+          </SContainer>
+        </SOverlay>
       </Portal>
     </Root>
   )
@@ -90,15 +101,19 @@ export const Modal = ({
 export const ModalScrollableContent = ({
   content,
   footer,
+  className,
 }: {
   content: ReactNode
   footer?: ReactNode
+  className?: string
 }) => {
   return (
     <>
       <div
+        className={className}
         css={{
           overflow: "overlay",
+          maxHeight: "80%",
           marginRight: "calc(-1 * var(--modal-content-padding) / 2)",
           paddingRight: "calc(var(--modal-content-padding) / 2)",
         }}

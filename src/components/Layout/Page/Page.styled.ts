@@ -1,18 +1,17 @@
-import { css } from "@emotion/react"
 import styled from "@emotion/styled"
 import { theme } from "theme"
 
 export const SPage = styled.div`
   --mobile-nav-height: calc(60px + env(safe-area-inset-bottom));
   --nav-height: 65px;
-  --content-width: 1109px;
+  --content-width: 1300px;
 
   position: relative;
 
   display: flex;
   flex-direction: column;
 
-  height: 100vh;
+  min-height: 100vh;
 
   background: ${theme.colors.bg};
 
@@ -21,38 +20,40 @@ export const SPage = styled.div`
 
     overflow-y: auto;
   }
+
+  @media ${theme.viewport.gte.md} {
+    height: 100vh;
+  }
 `
 
-export const SGradientBg = styled.div<{ variant?: "stats" | "default" }>`
+export const SGradientBg = styled.div<{ flipped?: boolean }>`
   position: absolute;
   top: 0;
   left: 0;
 
   width: 100%;
 
-  ${({ variant }) =>
-    variant === "stats"
-      ? css`
-          height: 1360px;
-          background: ${theme.gradients.backgroundStats};
-        `
-      : css`
-          height: 474px;
-          background: ${theme.gradients.background};
-        `}
+  height: 474px;
+  background: ${theme.gradients.background};
+
+  ${({ flipped }) =>
+    flipped &&
+    `
+      position: fixed;
+      rotate: 180deg;
+      height: 237px;
+      top: auto;
+      bottom: 0;
+      opacity: 0.4;
+  `}
 `
 
 export const SPageContent = styled.main`
   position: relative;
 
-  overflow-x: hidden;
-
   display: flex;
   flex-direction: column;
   flex-grow: 1;
-
-  padding-top: var(--nav-height);
-  padding-bottom: var(--mobile-nav-height);
 
   ::-webkit-scrollbar {
     width: 0px;
@@ -64,7 +65,6 @@ export const SPageContent = styled.main`
 
   @media ${theme.viewport.gte.sm} {
     padding: 0 20px;
-    padding-bottom: var(--mobile-nav-height);
 
     display: block;
 
@@ -81,7 +81,7 @@ export const SPageContent = styled.main`
 `
 
 export const SPageInner = styled.div`
-  padding: 16px 12px;
+  padding: 20px 12px;
 
   display: flex;
   flex-direction: column;
@@ -90,7 +90,7 @@ export const SPageInner = styled.div`
   position: relative;
 
   @media ${theme.viewport.gte.sm} {
-    padding: 44px 20px;
+    padding: 40px 20px;
 
     max-width: var(--content-width);
     margin: 0 auto;
@@ -99,27 +99,35 @@ export const SPageInner = styled.div`
   }
 `
 
-export const SPageGrid = styled.div`
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-
-  opacity: 0.06;
-  pointer-events: none;
-
-  background-size: 22px 22px;
-  background-image: linear-gradient(to right, white 1px, transparent 1px),
-    linear-gradient(to bottom, white 1px, transparent 1px);
-  mask-image: linear-gradient(180deg, #d9d9d9 0%, rgba(217, 217, 217, 0) 100%);
-`
-
 export const SSubHeader = styled.div`
-  border-bottom: solid 1px rgba(114, 131, 165, 0.6);
-
   width: 100vw;
 
   position: relative;
   z-index: 1;
 
-  margin: 0 -20px;
+  overflow-x: auto;
+
+  padding-bottom: 1px;
+
+  ::after {
+    content: "";
+
+    z-index: -1;
+    pointer-events: none;
+
+    position: absolute;
+    top: 0;
+    bottom: 1px;
+    left: 0;
+    right: 0;
+
+    background: rgba(9, 9, 9, 0.09);
+
+    border-bottom: 0.5px solid rgba(249, 225, 225, 0.25);
+    border-top: 0.5px solid rgba(249, 225, 225, 0.25);
+  }
+
+  @media (${theme.viewport.gte.sm}) {
+    margin: 0 -26px;
+  }
 `

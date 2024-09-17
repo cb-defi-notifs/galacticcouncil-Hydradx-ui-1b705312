@@ -1,21 +1,42 @@
 import { Link } from "@tanstack/react-location"
 import { useSetAsFeePayment } from "api/payments"
-import BuyIcon from "assets/icons/BuyIcon.svg?react"
+import TradeIcon from "assets/icons/Fill.svg?react"
 import DollarIcon from "assets/icons/DollarIcon.svg?react"
-import SellIcon from "assets/icons/SellIcon.svg?react"
 import TransferIcon from "assets/icons/TransferIcon.svg?react"
+import PlusIcon from "assets/icons/PlusIcon.svg?react"
 import { Button } from "components/Button/Button"
 import { DisplayValue } from "components/DisplayValue/DisplayValue"
 import { Modal } from "components/Modal/Modal"
 import { Separator } from "components/Separator/Separator"
 import { Text } from "components/Typography/Text/Text"
-import { useTranslation } from "react-i18next"
-import { useAccountStore } from "state/store"
+import { Trans, useTranslation } from "react-i18next"
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
 import { theme } from "theme"
 import { LINKS } from "utils/navigation"
-import { AssetsTableData } from "sections/wallet/assets/table/WalletAssetsTable.utils"
 import { SActionButtonsContainer } from "./WalletAssetsTable.styled"
 import { AssetTableName } from "components/AssetTableName/AssetTableName"
+import {
+  AssetsTableData,
+  useLockedNativeTokens,
+  useUnlockableTokens,
+  useUnlockTokens,
+} from "sections/wallet/assets/table/data/WalletAssetsTableData.utils"
+import Skeleton from "react-loading-skeleton"
+import {
+  AddTokenAction,
+  UpdateTokenDataAction,
+} from "./WalletAssetsTableActions"
+import { isEvmAccount } from "utils/evm"
+import { TOAST_MESSAGES } from "state/toasts"
+import { ToastMessage } from "state/store"
+import BN from "bignumber.js"
+import { BN_0 } from "utils/constants"
+import { SLocksContainer } from "sections/wallet/assets/table/details/WalletAssetsTableDetails.styled"
+import { useRpcProvider } from "providers/rpcProvider"
+import { useState } from "react"
+import { ExternalAssetUpdateModal } from "sections/trade/modal/ExternalAssetUpdateModal"
+import InfoIcon from "assets/icons/InfoIcon.svg?react"
+import { useAssets } from "providers/assets"
 
 type Props = {
   row?: AssetsTableData
@@ -29,13 +50,25 @@ export const WalletAssetsTableActionsMob = ({
   onTransferClick,
 }: Props) => {
   const { t } = useTranslation()
-  const { account } = useAccountStore()
+  const { native } = useAssets()
+  const { account } = useAccount()
   const setFeeAsPayment = useSetAsFeePayment()
+  const { featureFlags } = useRpcProvider()
+  const [assetCheckModalOpen, setAssetCheckModalOpen] = useState(false)
 
   if (!row) return null
 
-  const canBuy = row.tradability.inTradeRouter && row.tradability.canBuy
-  const canSell = row.tradability.inTradeRouter && row.tradability.canSell
+  const isNativeAsset = row.id === native.id
+
+  const displayFeePaymentAssetButton = isEvmAccount(account?.address)
+    ? featureFlags.dispatchPermit
+    : true
+
+  const isUnknownExternalAsset = row.isExternalInvalid
+
+  const rugCheckData = row.rugCheckData
+  const hasRugCheckData = !!rugCheckData
+  const hasRugCheckWarnings = !!rugCheckData?.warnings?.length
 
   return (
     <Modal open={!!row} isDrawer onClose={onClose} title="">
@@ -46,104 +79,403 @@ export const WalletAssetsTableActionsMob = ({
         <Separator
           css={{ background: `rgba(${theme.rgbColors.alpha0}, 0.06)` }}
         />
-        <div sx={{ flex: "row", justify: "space-between", py: 30 }}>
-          <div sx={{ flex: "column", gap: 4 }}>
-            <Text fs={14} lh={16} color="whiteish500">
-              {t("wallet.assets.table.header.total")}
+        <div
+          sx={{
+            flex: "row",
+            justify: "space-between",
+            py: 30,
+            flexWrap: "wrap",
+          }}
+        >
+          {hasRugCheckWarnings ? (
+            <>
+              <Text fs={13} color="warningOrange200" sx={{ p: 8 }}>
+                {t("wallet.assets.table.addToken.changed")}
+              </Text>{" "}
+            </>
+          ) : isUnknownExternalAsset ? (
+            <Text fs={13} color="whiteish500" sx={{ p: 8 }}>
+              {t("wallet.assets.table.addToken.unknown")}
             </Text>
-            <Text fs={14} lh={14} color="white">
-              {t("value", { value: row.total })}
-            </Text>
-            <Text fs={12} lh={17} color="whiteish500">
-              <DisplayValue value={row.totalDisplay} />
-            </Text>
-          </div>
-          <div sx={{ flex: "column", gap: 4 }}>
-            <Text fs={14} lh={16} color="whiteish500">
-              {t("wallet.assets.table.header.transferable")}
-            </Text>
-            <Text fs={14} lh={14} color="white">
-              {t("value", { value: row.transferable })}
-            </Text>
-            <Text fs={12} lh={17} color="whiteish500">
-              <DisplayValue value={row.transferableDisplay} />
-            </Text>
-          </div>
+          ) : (
+            <>
+              <div sx={{ flex: "column", gap: 4 }}>
+                <Text fs={14} lh={16} color="whiteish500">
+                  {t("wallet.assets.table.header.total")}
+                </Text>
+                <Text fs={14} lh={14} color="white">
+                  {t("value", { value: row.total })}
+                </Text>
+                <Text fs={12} lh={17} color="whiteish500">
+                  <DisplayValue value={row.totalDisplay} />
+                </Text>
+              </div>
+
+              <div sx={{ flex: "column", gap: 4 }}>
+                <Text fs={14} lh={16} color="whiteish500">
+                  {t("wallet.assets.table.header.transferable")}
+                </Text>
+                <Text fs={14} lh={14} color="white">
+                  {t("value", { value: row.transferable })}
+                </Text>
+                <Text fs={12} lh={12} color="whiteish500">
+                  <DisplayValue value={row.transferableDisplay} />
+                </Text>
+              </div>
+            </>
+          )}
         </div>
         <SActionButtonsContainer>
-          <div sx={{ flex: "row", justify: "space-between" }}>
-            <div sx={{ flex: "column", gap: 4, pt: 20, pb: 30 }}>
-              <Text fs={14} lh={16} color="whiteish500">
-                {t("wallet.assets.table.details.lockedDemocracy")}
-              </Text>
-              <Text fs={14} lh={14} color="white">
-                {t("value", { value: row.lockedDemocracy })}
-              </Text>
-              <Text fs={12} lh={17} color="whiteish500">
-                <DisplayValue value={row.lockedDemocracyDisplay} />
-              </Text>
-            </div>
-            <div sx={{ flex: "column", gap: 4, pt: 20, pb: 30 }}>
-              <Text fs={14} lh={16} color="whiteish500">
-                {t("wallet.assets.table.details.lockedVesting")}
-              </Text>
-              <Text fs={14} lh={14} color="white">
-                {t("value", { value: row.lockedVesting })}
-              </Text>
-              <Text fs={12} lh={17} color="whiteish500">
-                <DisplayValue value={row.lockedVestingDisplay} />
-              </Text>
-            </div>
-          </div>
-          <div sx={{ flex: "column", gap: 12 }}>
-            <div sx={{ flex: "row", gap: 12 }}>
-              <Link
-                to={LINKS.trade}
-                search={{ assetOut: row.id }}
-                disabled={!canBuy || account?.isExternalWalletConnected}
-                sx={{ width: "100%" }}
-              >
-                <Button sx={{ width: "100%" }} size="small" disabled={!canBuy}>
-                  <BuyIcon />
-                  {t("wallet.assets.table.actions.buy")}
+          {hasRugCheckWarnings ? (
+            <UpdateTokenDataAction
+              id={row.id}
+              css={{ width: "100%", marginTop: 20 }}
+            />
+          ) : isUnknownExternalAsset ? (
+            <AddTokenAction
+              id={row.id}
+              css={{ width: "100%", marginTop: 20 }}
+              onClose={onClose}
+            />
+          ) : (
+            <>
+              {isNativeAsset ? (
+                <NativeLocks
+                  reserved={row.reserved}
+                  reservedDisplay={row.reservedDisplay}
+                />
+              ) : (
+                <Locks
+                  reserved={row.reserved}
+                  reservedDisplay={row.reservedDisplay}
+                />
+              )}
+              <div sx={{ flex: "column", gap: 12, px: 8 }}>
+                <Link
+                  to={LINKS.swap}
+                  search={
+                    row.tradability.canBuy
+                      ? { assetOut: row.id }
+                      : { assetIn: row.id }
+                  }
+                  disabled={
+                    !row.tradability.inTradeRouter ||
+                    account?.isExternalWalletConnected
+                  }
+                  sx={{ width: "100%" }}
+                >
+                  <Button
+                    sx={{ width: "100%" }}
+                    size="small"
+                    disabled={
+                      !row.tradability.inTradeRouter ||
+                      account?.isExternalWalletConnected
+                    }
+                  >
+                    <TradeIcon />
+                    {t("wallet.assets.table.actions.trade")}
+                  </Button>
+                </Link>
+
+                <Button
+                  sx={{ width: "100%" }}
+                  size="small"
+                  disabled={account?.isExternalWalletConnected}
+                  onClick={() => onTransferClick(row.id)}
+                >
+                  <TransferIcon />
+                  {t("wallet.assets.table.actions.transfer")}
                 </Button>
-              </Link>
-              <Link
-                to={LINKS.trade}
-                search={{ assetIn: row.id }}
-                disabled={!canSell || account?.isExternalWalletConnected}
-                sx={{ width: "100%" }}
-              >
-                <Button sx={{ width: "100%" }} size="small" disabled={!canSell}>
-                  <SellIcon />
-                  {t("wallet.assets.table.actions.sell")}
-                </Button>
-              </Link>
-            </div>
-            <Button
-              sx={{ width: "100%" }}
-              size="small"
-              disabled={account?.isExternalWalletConnected}
-              onClick={() => onTransferClick(row.id)}
-            >
-              <TransferIcon />
-              {t("wallet.assets.table.actions.transfer")}
-            </Button>
-            <Button
-              sx={{ width: "100%" }}
-              size="small"
-              onClick={() => setFeeAsPayment(row.id)}
-              disabled={
-                !row.couldBeSetAsPaymentFee ||
-                account?.isExternalWalletConnected
-              }
-            >
-              <DollarIcon />
-              {t("wallet.assets.table.actions.payment.asset")}
-            </Button>
-          </div>
+
+                <Link
+                  to={LINKS.cross_chain}
+                  disabled={account?.isExternalWalletConnected}
+                  sx={{ width: "100%" }}
+                >
+                  <Button
+                    sx={{ width: "100%" }}
+                    size="small"
+                    disabled={account?.isExternalWalletConnected}
+                  >
+                    <PlusIcon />
+                    {t("wallet.assets.table.actions.deposit")}
+                  </Button>
+                </Link>
+
+                {hasRugCheckData && (
+                  <>
+                    <Button
+                      sx={{ width: "100%" }}
+                      size="small"
+                      onClick={() => setAssetCheckModalOpen(true)}
+                    >
+                      <InfoIcon width={18} height={18} />
+                      {t("wallet.assets.table.actions.checkExternal")}
+                    </Button>
+                    {assetCheckModalOpen && (
+                      <ExternalAssetUpdateModal
+                        open={assetCheckModalOpen}
+                        assetId={row.id}
+                        onClose={() => {
+                          setAssetCheckModalOpen(false)
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+
+                {displayFeePaymentAssetButton && (
+                  <Button
+                    sx={{ width: "100%" }}
+                    size="small"
+                    onClick={() => setFeeAsPayment(row.id)}
+                    disabled={
+                      !row.couldBeSetAsPaymentFee ||
+                      account?.isExternalWalletConnected
+                    }
+                  >
+                    <DollarIcon />
+                    {t("wallet.assets.table.actions.payment.asset")}
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
         </SActionButtonsContainer>
       </div>
     </Modal>
+  )
+}
+
+const NativeLocks = ({
+  reserved,
+  reservedDisplay,
+}: {
+  reserved: BN
+  reservedDisplay: BN
+}) => {
+  const { account } = useAccount()
+  const { t } = useTranslation()
+  const lockedTokens = useLockedNativeTokens()
+  const unlocable = useUnlockableTokens()
+
+  const toast = TOAST_MESSAGES.reduce((memo, type) => {
+    const msType = type === "onError" ? "onLoading" : type
+    memo[type] = (
+      <Trans
+        t={t}
+        i18nKey={`wallet.assets.table.details.${unlocable.value.isZero() ? "clear" : "unlock"}.${msType}`}
+        tOptions={{
+          amount: unlocable.ids.length,
+          value: unlocable.value,
+        }}
+      >
+        <span />
+      </Trans>
+    )
+    return memo
+  }, {} as ToastMessage)
+
+  const unlock = useUnlockTokens({
+    ids: unlocable.ids,
+    toast,
+  })
+
+  return (
+    <div sx={{ flex: "row", flexWrap: "wrap", py: 20 }}>
+      <div
+        sx={{
+          flex: "column",
+          gap: 4,
+          pr: 10,
+          mb: 20,
+          flexBasis: "50%",
+        }}
+      >
+        <Text fs={14} lh={16} color="whiteish500">
+          {t("wallet.assets.table.details.lockedStaking")}
+        </Text>
+        {lockedTokens.isLoading ? (
+          <Skeleton height={14} width={40} />
+        ) : (
+          <Text fs={14} lh={14} color="white">
+            {t("value", { value: lockedTokens.lockStaking })}
+          </Text>
+        )}
+        {lockedTokens.isLoading ? (
+          <Skeleton height={12} width={30} />
+        ) : (
+          <Text fs={12} lh={12} color="whiteish500">
+            <DisplayValue value={lockedTokens.lockStakingDisplay} />
+          </Text>
+        )}
+      </div>
+
+      <div
+        sx={{
+          flex: "row",
+          align: "end",
+          justify: "end",
+          flexBasis: "50%",
+          mb: 20,
+        }}
+      >
+        <div
+          sx={{
+            flex: "column",
+            gap: 4,
+          }}
+        >
+          <Text fs={14} lh={16} color="whiteish500">
+            {t("wallet.assets.table.details.lockedDemocracy")}
+          </Text>
+          {lockedTokens.isLoading ? (
+            <Skeleton height={14} width={40} />
+          ) : (
+            <Text fs={14} lh={14} color="white">
+              {t("value", { value: lockedTokens.lockDemocracy })}
+            </Text>
+          )}
+          {lockedTokens.isLoading ? (
+            <Skeleton height={12} width={30} />
+          ) : (
+            <Text fs={12} lh={12} color="whiteish500">
+              <DisplayValue value={lockedTokens.lockDemocracyDisplay} />
+            </Text>
+          )}
+          {unlocable.endDate ? (
+            <SLocksContainer sx={{ width: "fit-content" }}>
+              <Text fs={11} lh={15} color="darkBlue200">
+                {t("wallet.assets.table.details.expiring", {
+                  duration: unlocable.endDate,
+                })}
+              </Text>
+            </SLocksContainer>
+          ) : null}
+        </div>
+      </div>
+
+      <div sx={{ flex: "column", gap: 4, pr: 10, flexBasis: "50%", mb: 20 }}>
+        <Text fs={14} lh={16} color="whiteish500">
+          {t("wallet.assets.table.details.unlockable")}
+        </Text>
+
+        <Text fs={14} lh={14} color="white">
+          {unlocable.isLoading ? (
+            <Skeleton height={14} width={30} />
+          ) : (
+            t("value.token", { value: unlocable.value ?? BN_0 })
+          )}
+        </Text>
+        <Text fs={12} lh={12} color="whiteish500">
+          {unlocable.isLoading ? (
+            <Skeleton height={10} width={20} />
+          ) : (
+            <DisplayValue value={unlocable.displayValue ?? BN_0} />
+          )}
+        </Text>
+        {unlocable.votesUnlocked ? (
+          <SLocksContainer>
+            <Text fs={11} lh={15} color="darkBlue200">
+              {t("wallet.assets.table.details.expired", {
+                count: unlocable.votesUnlocked,
+              })}
+            </Text>
+          </SLocksContainer>
+        ) : null}
+      </div>
+
+      <div
+        sx={{
+          flex: "row",
+          align: "center",
+          justify: "end",
+          flexBasis: "50%",
+          mb: 20,
+        }}
+      >
+        <Button
+          variant="primary"
+          size="compact"
+          disabled={
+            account?.isExternalWalletConnected ||
+            !unlocable.ids.length ||
+            unlock.isLoading
+          }
+          onClick={() => unlock.mutate()}
+          isLoading={unlock.isLoading}
+        >
+          {t("wallet.assets.table.details.btn")}
+        </Button>
+      </div>
+
+      <div sx={{ flex: "column", gap: 4, pr: 10, flexBasis: "50%" }}>
+        <Text fs={14} lh={16} color="whiteish500">
+          {t("wallet.assets.table.details.reserved")}
+        </Text>
+        <Text fs={14} lh={14} color="white">
+          {t("value", { value: reserved })}
+        </Text>
+        <Text fs={12} lh={12} color="whiteish500">
+          <DisplayValue value={reservedDisplay} />
+        </Text>
+      </div>
+
+      <div
+        sx={{
+          flex: "row",
+          align: "end",
+          justify: "end",
+          flexBasis: "50%",
+          mb: 20,
+        }}
+      >
+        <div sx={{ flex: "column", gap: 4 }}>
+          <Text fs={14} lh={16} color="whiteish500">
+            {t("wallet.assets.table.details.lockedVesting")}
+          </Text>
+          {lockedTokens.isLoading ? (
+            <Skeleton height={14} width={40} />
+          ) : (
+            <Text fs={14} lh={14} color="white">
+              {t("value", { value: lockedTokens.lockVesting })}
+            </Text>
+          )}
+          {lockedTokens.isLoading ? (
+            <Skeleton height={12} width={30} />
+          ) : (
+            <Text fs={12} lh={12} color="whiteish500">
+              <DisplayValue value={lockedTokens.lockVestingDisplay} />
+            </Text>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const Locks = ({
+  reserved,
+  reservedDisplay,
+}: {
+  reserved: BN
+  reservedDisplay: BN
+}) => {
+  const { t } = useTranslation()
+
+  return (
+    <div sx={{ flex: "row", flexWrap: "wrap", py: 20 }}>
+      <div sx={{ flex: "column", gap: 4, pr: 10, flexBasis: "50%" }}>
+        <Text fs={14} lh={16} color="whiteish500">
+          {t("wallet.assets.table.details.reserved")}
+        </Text>
+        <Text fs={14} lh={14} color="white">
+          {t("value", { value: reserved })}
+        </Text>
+        <Text fs={12} lh={12} color="whiteish500">
+          <DisplayValue value={reservedDisplay} />
+        </Text>
+      </div>
+    </div>
   )
 }

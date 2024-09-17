@@ -10,7 +10,7 @@ import { Heading } from "components/Typography/Heading/Heading"
 import { Text } from "components/Typography/Text/Text"
 import { useCallback, useMemo } from "react"
 import { Trans, useTranslation } from "react-i18next"
-import { ToastMessage, useAccountStore, useStore } from "state/store"
+import { ToastMessage, useStore } from "state/store"
 import { TOAST_MESSAGES } from "state/toasts"
 import { theme } from "theme"
 import { separateBalance } from "utils/balance"
@@ -18,15 +18,15 @@ import { BN_10 } from "utils/constants"
 import { useDisplayPrice } from "utils/displayAsset"
 import { SClaimButton, SInner, SSchedule } from "./WalletVestingSchedule.styled"
 import { useRpcProvider } from "providers/rpcProvider"
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
+import { useAssets } from "providers/assets"
 
 export const WalletVestingSchedule = () => {
   const { t } = useTranslation()
-  const {
-    api,
-    assets: { native },
-  } = useRpcProvider()
+  const { api } = useRpcProvider()
+  const { native } = useAssets()
   const { createTransaction } = useStore()
-  const { account } = useAccountStore()
+  const { account } = useAccount()
   const { data: claimableBalance } = useVestingTotalClaimableBalance()
 
   const { data: nextClaimableDate } = useNextClaimableDate()
@@ -78,11 +78,7 @@ export const WalletVestingSchedule = () => {
     return !!account?.delegate
       ? await createTransaction(
           {
-            tx: api.tx.proxy.proxy(
-              account?.address,
-              null,
-              api.tx.vesting.claimFor(account?.address),
-            ),
+            tx: api.tx.vesting.claimFor(account?.address),
           },
           { isProxy: true, toast },
         )
@@ -106,7 +102,7 @@ export const WalletVestingSchedule = () => {
           <Text color="brightBlue200" fs={[14, 16]} fw={500}>
             {t("wallet.vesting.claimable_now")}
           </Text>
-          <Heading as="h3" font="FontOver" sx={{ fontSize: [28, 34] }}>
+          <Heading as="h3" font="GeistMono" sx={{ fontSize: [28, 34] }}>
             <Trans
               t={t}
               i18nKey="wallet.vesting.claimable_now_value"

@@ -29,6 +29,7 @@ export const SUnit = styled.span`
 
   font-size: 16px;
   line-height: 24px;
+  white-space: nowrap;
 `
 
 export const SDollars = styled.span`
@@ -49,6 +50,7 @@ export const SInput = styled.input`
   line-height: 24px;
   text-align: right;
   font-weight: 600;
+  font-family: "GeistSemiBold";
 
   padding: 0;
 

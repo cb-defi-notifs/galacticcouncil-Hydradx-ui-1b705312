@@ -4,17 +4,15 @@ import { useTranslation } from "react-i18next"
 import { MyActiveBonds } from "./MyActiveBonds"
 import { BondList } from "./list/BondList"
 import { Spacer } from "components/Spacer/Spacer"
-import { useRpcProvider } from "providers/rpcProvider"
+import { useAssets } from "providers/assets"
 
 export const BondsPage = () => {
   const { t } = useTranslation()
-  const {
-    assets: { bonds },
-  } = useRpcProvider()
+  const { bonds } = useAssets()
 
   return (
     <>
-      <Heading fs={19}>{t("bonds.title")}</Heading>
+      <Heading fs={19}>{t("bonds")}</Heading>
       <Spacer axis="vertical" size={33} />
       <BondList bonds={bonds} />
       <Spacer axis="vertical" size={33} />

@@ -6,7 +6,6 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { ButtonTransparent } from "components/Button/Button"
 import { DisplayValue } from "components/DisplayValue/DisplayValue"
 import { Icon } from "components/Icon/Icon"
 import { Text } from "components/Typography/Text/Text"
@@ -14,13 +13,29 @@ import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useMedia } from "react-use"
 import { theme } from "theme"
-import { shortenAccountAddress } from "utils/formatting"
+import {
+  getChainSpecificAddress,
+  shortenAccountAddress,
+} from "utils/formatting"
 import AccountIcon from "assets/icons/StakingAccountIcon.svg?react"
 import LinkIcon from "assets/icons/LinkIcon.svg?react"
+import { TLiquidityProvidersTableData } from "./data/LiquidityProvidersTableData.utils"
+import { useAccountIdentity } from "api/stats"
 
-export const useLiquidityProvidersTable = (data: any) => {
+const AccountName = ({ address }: { address: string }) => {
+  const identity = useAccountIdentity(address)
+
+  if (identity.data?.identity) return <>{identity.data.identity}</>
+
+  return <>{shortenAccountAddress(getChainSpecificAddress(address))}</>
+}
+
+export const useLiquidityProvidersTable = (
+  data: TLiquidityProvidersTableData,
+) => {
   const { t } = useTranslation()
-  const { accessor, display } = createColumnHelper<any[number]>()
+  const { accessor, display } =
+    createColumnHelper<TLiquidityProvidersTableData[number]>()
   const [sorting, setSorting] = useState<SortingState>([])
 
   const isDesktop = useMedia(theme.viewport.gte.sm)
@@ -37,7 +52,8 @@ export const useLiquidityProvidersTable = (data: any) => {
       accessor("account", {
         id: "account",
         header: t("account"),
-        sortingFn: (a, b) => a.original.symbol.localeCompare(b.original.symbol),
+        sortingFn: (a, b) =>
+          a.original.account.localeCompare(b.original.account),
         cell: ({ row }) => (
           <div
             sx={{
@@ -48,53 +64,64 @@ export const useLiquidityProvidersTable = (data: any) => {
             }}
           >
             <Icon size={26} icon={<AccountIcon />} />
-            <Text fs={[14]} color="basic300">
-              {shortenAccountAddress(row.original.account)}
+            <Text fs={14} color="basic300">
+              <AccountName address={row.original.account} />
             </Text>
           </div>
         ),
       }),
-      accessor("position", {
+      accessor("value", {
         id: "position",
         header: t("position"),
-        sortingFn: (a, b) => (a.original.tvl.gt(b.original.tvl) ? 1 : -1),
+        sortingFn: (a, b) => (a.original.value.gt(b.original.value) ? 1 : -1),
         cell: ({ row }) => (
-          <Text
-            tAlign={isDesktop ? "center" : "right"}
-            color="white"
-            fs={[13, 16]}
-          >
-            {row.original.position}
+          <Text fs={14} color="white">
+            {t("value.tokenWithSymbol", {
+              value: row.original.totalValueShifted,
+              symbol: row.original.symbol,
+            })}
           </Text>
         ),
       }),
-      accessor("tvl", {
+      accessor("valueDisplay", {
         id: "tvl",
         header: t("totalValueLocked"),
-        sortingFn: (a, b) => (a.original.volume.gt(b.original.volume) ? 1 : -1),
+        sortingFn: (a, b) =>
+          a.original.valueDisplay.gt(b.original.valueDisplay) ? 1 : -1,
         cell: ({ row }) => (
-          <Text tAlign="center" color="white">
-            <DisplayValue value={row.original.tvl} isUSD />
+          <Text fs={14} color="white">
+            <DisplayValue value={row.original.valueDisplay} isUSD />
           </Text>
         ),
       }),
-      accessor("share", {
+      accessor("sharePercent", {
         id: "share",
         header: t("stats.omnipool.table.header.share"),
-        sortingFn: (a, b) => (a.original.pol.gt(b.original.pol) ? 1 : -1),
+        sortingFn: (a, b) =>
+          a.original.sharePercent.gt(b.original.sharePercent) ? 1 : -1,
         cell: ({ row }) => (
-          <Text tAlign="center" color="white">
-            {row.original.share.toString()}
+          <Text fs={14} color="white">
+            {t("value.percentage", {
+              value: row.original.sharePercent,
+            })}
           </Text>
         ),
       }),
       display({
         id: "actions",
-        cell: () => (
-          <div>
-            <ButtonTransparent>
-              <Icon size={12} sx={{ color: "iconGray" }} icon={<LinkIcon />} />
-            </ButtonTransparent>
+        cell: ({ row }) => (
+          <div sx={{ pl: [5, 0] }}>
+            <a
+              href={`https://hydration.subscan.io/account/${row.original.account}`}
+              target="blank"
+              rel="noreferrer"
+            >
+              <Icon
+                size={12}
+                sx={{ color: "darkBlue300" }}
+                icon={<LinkIcon />}
+              />
+            </a>
           </div>
         ),
       }),

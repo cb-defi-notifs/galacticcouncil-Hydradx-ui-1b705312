@@ -1,5 +1,4 @@
-import { Icon } from "components/Icon/Icon"
-import { AssetLogo } from "components/AssetIcon/AssetIcon"
+import { MultipleAssetLogo } from "components/AssetIcon/AssetIcon"
 import { Text } from "components/Typography/Text/Text"
 import { theme } from "theme"
 import { DisplayValue } from "components/DisplayValue/DisplayValue"
@@ -10,6 +9,73 @@ import ChevronRightIcon from "assets/icons/ChevronRight.svg?react"
 import { TUseOmnipoolAssetDetailsData } from "sections/stats/StatsPage.utils"
 import { OmnipoolAssetsTableColumn } from "sections/stats/components/OmnipoolAssetsTable/OmnipoolAssetsTable.utils"
 import { useMedia } from "react-use"
+import { CellSkeleton } from "components/Skeleton/CellSkeleton"
+import { Farm, getMinAndMaxAPR, useFarmAprs, useFarms } from "api/farms"
+import { useMemo } from "react"
+import { BN_0 } from "utils/constants"
+import BigNumber from "bignumber.js"
+import { InfoTooltip } from "components/InfoTooltip/InfoTooltip"
+import { SInfoIcon } from "components/InfoTooltip/InfoTooltip.styled"
+import { useAssets } from "providers/assets"
+
+const APYFarming = ({ farms, apy }: { farms: Farm[]; apy: number }) => {
+  const { t } = useTranslation()
+
+  const farmAprs = useFarmAprs(farms)
+
+  const percentage = useMemo(() => {
+    if (farmAprs.data?.length) {
+      return getMinAndMaxAPR(farmAprs)
+    }
+
+    return {
+      minApr: BN_0,
+      maxApr: BN_0,
+    }
+  }, [farmAprs])
+
+  const isLoading = farmAprs.isInitialLoading
+
+  if (isLoading) return <CellSkeleton />
+
+  return (
+    <Text color="white" fs={14}>
+      {percentage.maxApr.gt(0)
+        ? t("value.percentage.range", {
+            from: percentage.minApr.lt(apy)
+              ? percentage.minApr
+              : BigNumber(apy),
+            to: percentage.maxApr.plus(apy),
+          })
+        : t("value.percentage", { value: BigNumber(apy) })}
+    </Text>
+  )
+}
+
+const APY = ({
+  assetId,
+  fee,
+  isLoading,
+}: {
+  assetId: string
+  fee: BigNumber
+  isLoading: boolean
+}) => {
+  const { t } = useTranslation()
+  const { native } = useAssets()
+  const farms = useFarms([assetId])
+
+  if (isLoading || farms.isLoading) return <CellSkeleton />
+
+  if (farms.data?.length)
+    return <APYFarming farms={farms.data} apy={fee.toNumber()} />
+
+  return (
+    <Text color="white" fs={14}>
+      {assetId === native.id ? "--" : t("value.percentage", { value: fee })}
+    </Text>
+  )
+}
 
 export const useOmnipoolAssetsColumns = (): OmnipoolAssetsTableColumn[] => {
   const { accessor, display } =
@@ -31,18 +97,21 @@ export const useOmnipoolAssetsColumns = (): OmnipoolAssetsTableColumn[] => {
             justify: "start",
           }}
         >
-          <Icon size={26} icon={<AssetLogo id={row.original.id} />} />
+          <MultipleAssetLogo size={[26, 30]} iconId={row.original.iconIds} />
+
           <div sx={{ flex: "column" }}>
-            <Text fs={[14, 16]} color="white">
+            <Text fs={14} color="white" fw={600}>
               {row.original.symbol}
             </Text>
-            <Text
-              fs={12}
-              css={{ color: `rgba(${theme.rgbColors.whiteish500}, 0.61)` }}
-              sx={{ display: ["inherit", "none"] }}
-            >
-              {row.original.name}
-            </Text>
+            {isDesktop && (
+              <Text
+                fs={12}
+                css={{ color: `rgba(${theme.rgbColors.whiteish500}, 0.61)` }}
+                sx={{ display: ["inherit", "none"] }}
+              >
+                {row.original.name}
+              </Text>
+            )}
           </div>
         </div>
       ),
@@ -52,11 +121,7 @@ export const useOmnipoolAssetsColumns = (): OmnipoolAssetsTableColumn[] => {
       header: t("stats.overview.table.assets.header.tvl"),
       sortingFn: (a, b) => (a.original.tvl.gt(b.original.tvl) ? 1 : -1),
       cell: ({ row }) => (
-        <Text
-          tAlign={isDesktop ? "center" : "right"}
-          color="white"
-          fs={[13, 16]}
-        >
+        <Text tAlign={isDesktop ? "left" : "right"} color="white" fs={14}>
           <DisplayValue value={row.original.tvl} isUSD />
         </Text>
       ),
@@ -65,19 +130,47 @@ export const useOmnipoolAssetsColumns = (): OmnipoolAssetsTableColumn[] => {
       id: "volume",
       header: t("stats.overview.table.assets.header.volume"),
       sortingFn: (a, b) => (a.original.volume.gt(b.original.volume) ? 1 : -1),
+      cell: ({ row }) => {
+        if (row.original.isLoadingVolume) {
+          return <CellSkeleton />
+        }
+        return (
+          <Text color="white" fs={14}>
+            <DisplayValue value={row.original.volume} isUSD />
+          </Text>
+        )
+      },
+    }),
+    display({
+      id: "apy",
+      //@ts-ignore
+      header: (
+        <div sx={{ flex: "row", align: "center", gap: 4 }}>
+          {t("stats.overview.table.assets.header.apy")}
+          <InfoTooltip text={t("stats.overview.table.assets.header.apy.desc")}>
+            <SInfoIcon />
+          </InfoTooltip>
+        </div>
+      ),
       cell: ({ row }) => (
-        <Text tAlign="center" color="white">
-          <DisplayValue value={row.original.volume} isUSD />
-        </Text>
+        <APY
+          assetId={row.original.id}
+          fee={row.original.fee}
+          isLoading={row.original.isLoadingFee}
+        />
       ),
     }),
-    accessor("pol", {
-      id: "pol",
-      header: t("stats.overview.table.assets.header.pol"),
-      sortingFn: (a, b) => (a.original.pol.gt(b.original.pol) ? 1 : -1),
+    accessor("price", {
+      id: "price",
+      header: t("stats.overview.table.assets.header.price"),
+      sortingFn: (a, b) => (a.original.price.gt(b.original.price) ? 1 : -1),
       cell: ({ row }) => (
-        <Text tAlign="center" color="white">
-          <DisplayValue value={row.original.pol} isUSD />
+        <Text color="white" fs={14}>
+          {t("value.token", {
+            value: row.original.price,
+            decimalPlaces: 4,
+            numberPrefix: "$",
+          })}
         </Text>
       ),
     }),
@@ -85,7 +178,7 @@ export const useOmnipoolAssetsColumns = (): OmnipoolAssetsTableColumn[] => {
       id: "actions",
       cell: () => (
         <div>
-          <ButtonTransparent css={{ color: theme.colors.iconGray }}>
+          <ButtonTransparent sx={{ color: "darkBlue300" }}>
             <ChevronRightIcon />
           </ButtonTransparent>
         </div>

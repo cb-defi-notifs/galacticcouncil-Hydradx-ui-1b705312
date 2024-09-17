@@ -1,137 +1,68 @@
 import { Text } from "components/Typography/Text/Text"
 import { SContainer, SJoinButton } from "./RedepositFarms.styled"
 import { Trans, useTranslation } from "react-i18next"
-import { Icon } from "components/Icon/Icon"
-import { AssetLogo } from "components/AssetIcon/AssetIcon"
-import { ReactElement, useState } from "react"
-import { SSeparator } from "sections/pools/farms/position/FarmingPosition.styled"
-import { DepositNftType } from "api/deposits"
-import { useFarmApr, useFarms } from "api/farms"
-import { useFarmRedepositMutation } from "utils/farms/redeposit"
 import { JoinFarmModal } from "sections/pools/farms/modals/join/JoinFarmsModal"
-import { TOAST_MESSAGES } from "state/toasts"
-import { ToastMessage } from "state/store"
-import { useAccountStore } from "state/store"
-import { useRpcProvider } from "providers/rpcProvider"
-import { u32 } from "@polkadot/types-codec"
-
-type RedepositFarmProps = {
-  availableYieldFarm: NonNullable<ReturnType<typeof useFarms>["data"]>[0]
-}
-
-const RedepositFarm = ({ availableYieldFarm }: RedepositFarmProps) => {
-  const { assets } = useRpcProvider()
-  const { data: farmApr } = useFarmApr(availableYieldFarm)
-  const assetMeta = farmApr?.assetId
-    ? assets.getAsset(farmApr.assetId.toString())
-    : undefined
-  return (
-    <div sx={{ flex: "row", align: "center", gap: 8 }}>
-      <Icon size={24} icon={<AssetLogo id={assetMeta?.id} />} />
-      <Text>{assetMeta?.symbol}</Text>
-    </div>
-  )
-}
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
+import { GlobalFarmRowMulti } from "sections/pools/farms/components/globalFarm/GlobalFarmRowMulti"
+import { useState } from "react"
+import { Farm } from "api/farms"
+import {
+  isXYKDeposit,
+  TDepositData,
+} from "sections/pools/farms/position/FarmingPosition.utils"
+import { omit } from "utils/rx"
+import { TDeposit } from "api/deposits"
 
 type RedepositFarmsProps = {
-  depositNft: DepositNftType
-  poolId: u32
+  depositNft: TDeposit
+  availableYieldFarms: Farm[]
+  depositData: TDepositData
 }
 
-export const RedepositFarms = ({ depositNft, poolId }: RedepositFarmsProps) => {
+export const RedepositFarms = ({
+  depositNft,
+  availableYieldFarms,
+  depositData,
+}: RedepositFarmsProps) => {
   const { t } = useTranslation()
-  const { assets } = useRpcProvider()
-  const { account } = useAccountStore()
+  const { account } = useAccount()
   const [joinFarm, setJoinFarm] = useState(false)
-
-  const farms = useFarms([poolId])
-  const meta = assets.getAsset(poolId.toString())
-
-  let availableYieldFarms =
-    farms.data?.filter(
-      (i) =>
-        !depositNft.deposit.yieldFarmEntries.some(
-          (entry) =>
-            entry.globalFarmId.eq(i.globalFarm.id) &&
-            entry.yieldFarmId.eq(i.yieldFarm.id),
-        ),
-    ) ?? []
-
-  const toast = TOAST_MESSAGES.reduce((memo, type) => {
-    const msType = type === "onError" ? "onLoading" : type
-    memo[type] = (
-      <Trans
-        t={t}
-        i18nKey={`farms.modal.join.toast.${msType}`}
-        tOptions={{
-          amount: depositNft.deposit.shares.toBigNumber(),
-          fixedPointScale: meta.decimals,
-        }}
-      >
-        <span />
-        <span className="highlight" />
-      </Trans>
-    )
-    return memo
-  }, {} as ToastMessage)
-
-  const redeposit = useFarmRedepositMutation(
-    availableYieldFarms,
-    [depositNft],
-    toast,
-    () => setJoinFarm(false),
-  )
 
   if (!availableYieldFarms.length) return null
 
-  const farmComponents = availableYieldFarms.reduce(
-    (acc, availableYieldFarm, i) => {
-      const isLastElement = i + 1 === availableYieldFarms.length
-
-      acc.push(
-        <RedepositFarm
-          key={`farm_${i}`}
-          availableYieldFarm={availableYieldFarm}
-        />,
-      )
-
-      if (!isLastElement)
-        acc.push(
-          <SSeparator
-            key={`separator_${i}`}
-            sx={{ height: 35 }}
-            orientation="vertical"
-          />,
-        )
-
-      return acc
-    },
-    [] as ReactElement[],
-  )
-
   return (
     <SContainer>
-      <Text fs={13} fw={600} color="brightBlue300" tTransform="uppercase">
-        <Trans t={t} i18nKey="farms.positions.redeposit.openFarms" />
-      </Text>
-      {farmComponents}
+      <div sx={{ flex: "column", gap: 4 }}>
+        <Text fs={13} color="brightBlue300" tTransform="uppercase">
+          <Trans t={t} i18nKey="farms.positions.redeposit.openFarms" />
+        </Text>
+
+        <GlobalFarmRowMulti
+          farms={availableYieldFarms}
+          fontSize={16}
+          iconSize={24}
+          css={{ flexDirection: "row-reverse" }}
+        />
+      </div>
+
       <SJoinButton
         onClick={() => setJoinFarm(true)}
         disabled={account?.isExternalWalletConnected}
       >
-        <Text fs={13} color="basic900" tTransform="uppercase" tAlign="center">
+        <Text fs={12} color="basic900" tTransform="uppercase" tAlign="center">
           {t("farms.positions.join.button.label")}
         </Text>
       </SJoinButton>
       {joinFarm && (
         <JoinFarmModal
           farms={availableYieldFarms}
-          isOpen={joinFarm}
-          poolId={poolId}
-          shares={depositNft.deposit.shares.toBigNumber()}
-          mutation={redeposit}
+          position={
+            !isXYKDeposit(depositData)
+              ? omit(["depositId"], depositData)
+              : undefined
+          }
           onClose={() => setJoinFarm(false)}
-          isRedeposit
+          depositNft={depositNft}
         />
       )}
     </SContainer>

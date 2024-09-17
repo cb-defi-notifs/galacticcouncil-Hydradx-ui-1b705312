@@ -1,141 +1,68 @@
 import { css } from "@emotion/react"
 import styled from "@emotion/styled"
+import { ButtonTransparent } from "components/Button/Button"
 import { theme } from "theme"
 
 export const TableContainer = styled.div`
-  background: #111320;
+  background: ${theme.colors.darkBlue700};
   overflow: hidden;
-  box-shadow: ${theme.shadows.boxShadowTable};
+  position: relative;
 
   margin: 0 -12px;
 
-  background-image: radial-gradient(
-      circle at 100% 100%,
-      transparent 3px,
-      rgba(144, 165, 198, 0.3) 3px,
-      rgba(144, 165, 198, 0.3) 4px,
-      transparent 4px
-    ),
-    linear-gradient(
-      to right,
-      rgba(144, 165, 198, 0.3),
-      rgba(144, 165, 198, 0.3)
-    ),
-    radial-gradient(
-      circle at 0% 100%,
-      transparent 3px,
-      rgba(144, 165, 198, 0.3) 3px,
-      rgba(144, 165, 198, 0.3) 4px,
-      transparent 4px
-    ),
-    linear-gradient(to bottom, rgba(144, 165, 198, 0.3), rgba(158, 167, 180, 0)),
-    radial-gradient(
-      circle at 0% 0%,
-      transparent 3px,
-      rgba(158, 167, 180, 0) 3px,
-      rgba(158, 167, 180, 0) 4px,
-      transparent 4px
-    ),
-    linear-gradient(to left, rgba(158, 167, 180, 0), rgba(158, 167, 180, 0)),
-    radial-gradient(
-      circle at 100% 0%,
-      transparent 3px,
-      rgba(158, 167, 180, 0) 3px,
-      rgba(158, 167, 180, 0) 4px,
-      transparent 4px
-    ),
-    linear-gradient(to top, rgba(158, 167, 180, 0), rgba(144, 165, 198, 0.3));
-  background-size:
-    4px 4px,
-    calc(100% - 8px) 1px,
-    4px 4px,
-    1px calc(100% - 8px);
-  background-position:
-    top left,
-    top center,
-    top right,
-    center right,
-    bottom right,
-    bottom center,
-    bottom left,
-    center left;
-
-  background-repeat: no-repeat;
+  border-top: 1px solid rgba(152, 176, 214, 0.27);
 
   @media ${theme.viewport.gte.sm} {
-    border-radius: 4px;
+    border-radius: ${theme.borderRadius.medium}px;
 
     margin: unset;
+
+    border-top: 0;
+
+    :before {
+      content: "";
+      position: absolute;
+      inset: 0;
+
+      pointer-events: none;
+
+      border-radius: 8px;
+      padding: 1px; // a width of the border
+
+      background: linear-gradient(
+        180deg,
+        rgba(152, 176, 214, 0.27) 0%,
+        rgba(163, 177, 199, 0.15) 66.67%,
+        rgba(158, 167, 180, 0.2) 100%
+      );
+
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+    }
   }
 `
 
 export const StatsTableContainer = styled.div`
   overflow: hidden;
+  position: relative;
 
-  background-image: radial-gradient(
-      circle at 100% 100%,
-      transparent 3px,
-      rgba(144, 165, 198, 0.3) 3px,
-      rgba(144, 165, 198, 0.3) 4px,
-      transparent 4px
-    ),
-    linear-gradient(
-      to right,
-      rgba(144, 165, 198, 0.3),
-      rgba(144, 165, 198, 0.3)
-    ),
-    radial-gradient(
-      circle at 0% 100%,
-      transparent 3px,
-      rgba(144, 165, 198, 0.3) 3px,
-      rgba(144, 165, 198, 0.3) 4px,
-      transparent 4px
-    ),
-    linear-gradient(to bottom, rgba(144, 165, 198, 0.3), rgba(158, 167, 180, 0)),
-    radial-gradient(
-      circle at 0% 0%,
-      transparent 3px,
-      rgba(158, 167, 180, 0) 3px,
-      rgba(158, 167, 180, 0) 4px,
-      transparent 4px
-    ),
-    linear-gradient(to left, rgba(158, 167, 180, 0), rgba(158, 167, 180, 0)),
-    radial-gradient(
-      circle at 100% 0%,
-      transparent 3px,
-      rgba(158, 167, 180, 0) 3px,
-      rgba(158, 167, 180, 0) 4px,
-      transparent 4px
-    ),
-    linear-gradient(to top, rgba(158, 167, 180, 0), rgba(144, 165, 198, 0.3));
-  background-size:
-    4px 4px,
-    calc(100% - 8px) 1px,
-    4px 4px,
-    1px calc(100% - 8px);
-  background-position:
-    top left,
-    top center,
-    top right,
-    center right,
-    bottom right,
-    bottom center,
-    bottom left,
-    center left;
-
-  background-repeat: no-repeat;
-
-  @media ${theme.viewport.gte.sm} {
-    border-radius: 4px;
-
-    background: transparent;
-  }
+  border-radius: ${theme.borderRadius.medium}px;
+  border: 1px solid rgba(152, 176, 214, 0.27);
 `
 
 export const Table = styled.table`
   width: 100%;
   border-spacing: 0;
   border-collapse: collapse;
+
+  border-bottom: 1px solid rgba(152, 176, 214, 0.27);
+
+  @media ${theme.viewport.gte.sm} {
+    border-bottom: none;
+  }
 `
 
 export const TableTitle = styled.div`
@@ -161,7 +88,7 @@ export const StatsTableTitle = styled.div`
   border-bottom: 1px solid #202135;
 
   @media ${theme.viewport.gte.sm} {
-    padding: 0px 30px;
+    padding: 24px 30px 0px;
 
     border-bottom: none;
   }
@@ -189,18 +116,16 @@ export const TablePlaceholderContent = styled.div`
 `
 
 export const TableRow = styled.tr<{
-  isOdd?: boolean
-  isSub?: boolean
   header?: boolean
 }>`
   transition: ${theme.transitions.slow};
+
+  border-top: 1px solid rgba(32, 33, 53, 1);
 
   :hover {
     ${({ header }) =>
       !header && `background: rgba(${theme.rgbColors.white}, 0.06);`}
   }
-  ${({ isOdd }) => isOdd && `background: rgba(${theme.rgbColors.white}, 0.03);`}
-  ${({ isSub }) => isSub && `background: rgba(${theme.rgbColors.white}, 0.06);`}
 `
 
 export const TableRowStats = styled.tr<{
@@ -230,13 +155,12 @@ export const TableHeader = styled.th<{ canSort?: boolean }>`
 
   font-size: 11px;
   line-height: 14px;
-  font-weight: 500;
+  font-family: "Geist";
 
   text-transform: uppercase;
   text-align: start;
   color: rgba(${theme.rgbColors.white}, 0.7);
   color: ${theme.colors.basic600};
-  white-space: nowrap;
 
   ${({ canSort }) => canSort && "cursor:pointer;"}
 
@@ -247,27 +171,80 @@ export const TableHeader = styled.th<{ canSort?: boolean }>`
   @media ${theme.viewport.gte.sm} {
     padding: 24px 32px;
 
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 11px;
+    line-height: 14px;
     font-weight: 600;
   }
 `
 
-export const TableData = styled.td<{ isExpanded?: boolean }>`
-  padding: 16px;
-  padding-right: 0;
+export const TableData = styled.td<{
+  isExpanded?: boolean
+  isSkeleton?: boolean
+  sub?: boolean
+}>`
+  height: 56px;
+
+  padding: 0 16px;
+
+  ${({ isSkeleton }) => !isSkeleton && "padding-right: 0px;"}
   text-align: start;
 
   ${({ isExpanded }) =>
-    isExpanded && `background: rgba(${theme.rgbColors.white}, 0.06);`}
+    isExpanded && `background: rgba(${theme.rgbColors.white}, 0.03);`}
 
-  // shrink actions column
   &:last-of-type {
-    width: 0;
-    padding-right: 10px;
+    width: 1px;
+    text-align: end;
   }
 
   @media ${theme.viewport.gte.sm} {
-    padding: 24px 32px;
+    height: 82px;
+
+    ${({ sub }) => (sub ? `padding: 24px 32px` : "padding: 0 32px")};
+
+    &:last-of-type {
+      padding-right: 10px;
+    }
+  }
+`
+
+export const TableFooter = styled.div`
+  padding: 12px 0;
+
+  display: flex;
+  aligh-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  border-top: 1px solid rgba(32, 33, 53, 1);
+`
+
+export const ButtonPagination = styled(ButtonTransparent)<{ active?: boolean }>`
+  padding: 8px;
+  justify-content: center;
+  align-items: center;
+  minwidth: 22px;
+  height: 22px;
+
+  border-radius: ${theme.borderRadius.default}px;
+  background: ${({ active }) =>
+    active
+      ? `rgba(${theme.rgbColors.alpha0}, 0.15)`
+      : `rgba(${theme.rgbColors.alpha0}, 0.06)`};
+  color: ${theme.colors.white};
+
+  font-size: 13px;
+
+  &:hover {
+    background: rgba(${theme.rgbColors.alpha0}, 0.1);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    box-shadow: unset;
+    transform: none;
+
+    color: ${theme.colors.basic800};
+    background: transparent;
   }
 `

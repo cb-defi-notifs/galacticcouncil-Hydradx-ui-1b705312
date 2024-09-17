@@ -1,4 +1,3 @@
-import { DepositNftType } from "api/deposits"
 import { Farm } from "api/farms"
 import { Text } from "components/Typography/Text/Text"
 import { useRef } from "react"
@@ -7,26 +6,27 @@ import { FarmDetailsCard } from "sections/pools/farms/components/detailsCard/Far
 import { LoyaltyGraph } from "sections/pools/farms/components/loyaltyGraph/LoyaltyGraph"
 import { SLoyaltyRewardsContainer } from "./FarmDetailsModal.styled"
 import { FarmDetailsModalValues } from "./FarmDetailsModalValues"
-import { u32 } from "@polkadot/types-codec"
+import { TDeposit } from "api/deposits"
+import { TDepositData } from "sections/pools/farms/position/FarmingPosition.utils"
 
 type FarmDetailsModalProps = {
-  poolId: u32
   farm: Farm
-  depositNft: DepositNftType | undefined
+  depositNft?: TDeposit
+  depositData?: TDepositData
   currentBlock?: number
 }
 
 export const FarmDetailsModal = ({
   farm,
   depositNft,
-  poolId,
+  depositData,
   currentBlock,
 }: FarmDetailsModalProps) => {
   const { t } = useTranslation()
 
   const loyaltyCurve = farm.yieldFarm.loyaltyCurve.unwrapOr(null)
 
-  const enteredBlock = depositNft?.deposit.yieldFarmEntries
+  const enteredBlock = depositNft?.data.yieldFarmEntries
     .find(
       (entry) =>
         entry.yieldFarmId.eq(farm.yieldFarm.id) &&
@@ -38,14 +38,14 @@ export const FarmDetailsModal = ({
 
   return (
     <>
-      <FarmDetailsCard poolId={poolId} depositNft={depositNft} farm={farm} />
+      <FarmDetailsCard depositNft={depositNft} farm={farm} />
 
       {loyaltyCurve && currentBlockRef.current && (
         <SLoyaltyRewardsContainer>
           <Text
             fs={19}
             sx={{ mb: 30 }}
-            font="FontOver"
+            font="GeistMono"
             color="basic100"
             tTransform="uppercase"
           >
@@ -61,11 +61,11 @@ export const FarmDetailsModal = ({
         </SLoyaltyRewardsContainer>
       )}
 
-      {depositNft && enteredBlock ? (
+      {depositNft && depositData && enteredBlock ? (
         <FarmDetailsModalValues
+          depositData={depositData}
           yieldFarmId={farm.yieldFarm.id.toString()}
           depositNft={depositNft}
-          poolId={poolId}
           enteredBlock={enteredBlock}
         />
       ) : (

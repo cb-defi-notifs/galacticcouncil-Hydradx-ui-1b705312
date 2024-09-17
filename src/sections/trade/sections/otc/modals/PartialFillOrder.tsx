@@ -3,18 +3,25 @@ import BigNumber from "bignumber.js"
 import { Button } from "components/Button/Button"
 import { Modal } from "components/Modal/Modal"
 import { Text } from "components/Typography/Text/Text"
-import { useEffect } from "react"
 import { Controller, useForm } from "react-hook-form"
 import { Trans, useTranslation } from "react-i18next"
 import { getFixedPointAmount } from "utils/balance"
-import { BN_0, BN_10 } from "utils/constants"
+import { BN_0, BN_1 } from "utils/constants"
 import { FormValues } from "utils/helpers"
-import { useAccountStore, useStore } from "state/store"
+import { useStore } from "state/store"
 import { OrderCapacity } from "sections/trade/sections/otc/capacity/OrderCapacity"
 import { OfferingPair } from "sections/trade/sections/otc/orders/OtcOrdersData.utils"
-import { OrderAssetPrice } from "./cmp/AssetPrice"
 import { OrderAssetGet, OrderAssetPay } from "./cmp/AssetSelect"
 import { useRpcProvider } from "providers/rpcProvider"
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
+import { TokensConversion } from "sections/pools/modals/AddLiquidity/components/TokensConvertion/TokensConversion"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { usePartialFillFormSchema } from "sections/trade/sections/otc/modals/PartialFillOrder.utils"
+import { Spacer } from "components/Spacer/Spacer"
+import { Summary } from "components/Summary/Summary"
+import Skeleton from "react-loading-skeleton"
+import { useOTCfee } from "api/consts"
+import { useAssets } from "providers/assets"
 
 const FULL_ORDER_PCT_LBOUND = 99
 
@@ -34,26 +41,31 @@ export const PartialFillOrder = ({
   onSuccess,
 }: FillOrderProps) => {
   const { t } = useTranslation()
-  const { account } = useAccountStore()
+  const { account } = useAccount()
+  const { getAssetWithFallback } = useAssets()
+  const { api } = useRpcProvider()
+  const fee = useOTCfee()
+  const assetInMeta = getAssetWithFallback(accepting.asset)
+  const assetInBalance = useTokenBalance(accepting.asset, account?.address)
+  const assetOutMeta = getAssetWithFallback(offering.asset)
+
+  const formSchema = usePartialFillFormSchema({
+    offeringAmount: offering.amount,
+    assetInBalance: assetInBalance.data?.balance ?? BN_0,
+    assetInDecimals: assetInMeta.decimals,
+  })
 
   const form = useForm<{
     amountIn: string
     amountOut: string
     free: BigNumber
   }>({
+    mode: "onChange",
     defaultValues: {
       free: accepting.amount,
     },
+    resolver: zodResolver(formSchema),
   })
-
-  useEffect(() => {
-    form.trigger()
-  }, [form])
-
-  const { api, assets } = useRpcProvider()
-  const assetInMeta = assets.getAsset(accepting.asset)
-  const assetInBalance = useTokenBalance(accepting.asset, account?.address)
-  const assetOutMeta = assets.getAsset(offering.asset)
 
   const { createTransaction } = useStore()
 
@@ -62,14 +74,14 @@ export const PartialFillOrder = ({
   const handlePayWithChange = () => {
     const { amountOut } = form.getValues()
     const amountIn = new BigNumber(amountOut).multipliedBy(price)
-    form.setValue("amountIn", amountIn.toFixed())
+    form.setValue("amountIn", !amountIn.isNaN() ? amountIn.toFixed() : "")
     form.trigger()
   }
 
   const handleYouGetChange = () => {
     const { amountIn } = form.getValues()
     const amountOut = new BigNumber(amountIn).div(price)
-    form.setValue("amountOut", amountOut.toFixed())
+    form.setValue("amountOut", !amountOut.isNaN() ? amountOut.toFixed() : "")
     form.trigger()
   }
 
@@ -147,7 +159,7 @@ export const PartialFillOrder = ({
     <Modal
       open
       disableCloseOutside
-      title={t("otc.order.fill.title")}
+      title={t("otc.order.partialFill.title")}
       onClose={() => {
         onClose()
         form.reset()
@@ -164,7 +176,7 @@ export const PartialFillOrder = ({
         <Text fs={16} color="basic500">
           {"Remaining amount:"}
         </Text>
-        <Text fs={[20, 24]} color="white" font="FontOver" as="div">
+        <Text fs={[20, 24]} color="white" as="div">
           {t("otc.order.fill.remaining", {
             remaining: accepting.amount,
             symbol: accepting.symbol,
@@ -196,25 +208,6 @@ export const PartialFillOrder = ({
         <Controller
           name="amountIn"
           control={form.control}
-          rules={{
-            required: true,
-            validate: {
-              maxBalance: (value) => {
-                const balance = assetInBalance.data?.balance
-                const decimals = assetInMeta.decimals.toString()
-                if (
-                  balance &&
-                  decimals &&
-                  balance.gte(
-                    new BigNumber(value).multipliedBy(BN_10.pow(decimals)),
-                  )
-                ) {
-                  return true
-                }
-                return t("otc.order.fill.validation.notEnoughBalance")
-              },
-            },
-          }}
           render={({
             field: { name, value, onChange },
             fieldState: { error },
@@ -234,25 +227,20 @@ export const PartialFillOrder = ({
             />
           )}
         />
-        <OrderAssetPrice
-          inputAsset={assetOutMeta.symbol}
-          outputAsset={assetInMeta.symbol}
-          price={price && price.toFixed()}
+        <TokensConversion
+          placeholderValue="-"
+          firstValue={{
+            amount: BN_1,
+            symbol: assetOutMeta.symbol,
+          }}
+          secondValue={{
+            amount: price,
+            symbol: assetInMeta.symbol,
+          }}
         />
         <Controller
           name="amountOut"
           control={form.control}
-          rules={{
-            required: true,
-            validate: {
-              orderTooBig: (value) => {
-                if (offering.amount.gte(new BigNumber(value))) {
-                  return true
-                }
-                return t("otc.order.fill.validation.orderTooBig")
-              },
-            },
-          }}
           render={({
             field: { name, value, onChange },
             fieldState: { error },
@@ -272,12 +260,37 @@ export const PartialFillOrder = ({
             />
           )}
         />
+        {fee.data?.isNaN() ? null : (
+          <>
+            <Spacer size={8} />
+            <Summary
+              rows={[
+                {
+                  label: t("liquidity.add.modal.tradeFee"),
+                  content: fee.isLoading ? (
+                    <Skeleton width={30} height={12} />
+                  ) : (
+                    <Text fs={14} color="white" tAlign="right">
+                      {fee.data
+                        ? t("value.tokenWithSymbol", {
+                            value: fee.data.times(form.getValues("amountOut")),
+                            symbol: assetOutMeta.symbol,
+                          })
+                        : "N/a"}
+                    </Text>
+                  ),
+                },
+              ]}
+            />
+          </>
+        )}
+
         <Button
           sx={{ mt: 20 }}
           variant="primary"
           disabled={!form.formState.isValid}
         >
-          {t("otc.order.fill.confirm")}
+          {t("otc.order.partialFill.confirm")}
         </Button>
       </form>
     </Modal>

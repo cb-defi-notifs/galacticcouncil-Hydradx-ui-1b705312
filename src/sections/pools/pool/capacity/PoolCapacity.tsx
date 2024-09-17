@@ -1,16 +1,14 @@
-import { OmnipoolPool } from "sections/pools/PoolsPage.utils"
-import { SBar, SBarContainer, SContainer } from "./PoolCapacity.styled"
+import { SContainer } from "./PoolCapacity.styled"
 import { usePoolCapacity } from "sections/pools/pool/capacity/PoolCapacity.utils"
-import { useMeasure } from "react-use"
 import { Trans } from "react-i18next"
 import { Text } from "components/Typography/Text/Text"
-import { Separator } from "components/Separator/Separator"
+import { LinearProgress } from "components/Progress"
+import { theme } from "theme"
 
 type Props = { id: string; className?: string }
 
 export const PoolCapacity = ({ id, className }: Props) => {
   const capacity = usePoolCapacity(id)
-  const [ref, { width }] = useMeasure<HTMLDivElement>()
 
   if (capacity.isLoading || !capacity.data) return null
 
@@ -19,8 +17,7 @@ export const PoolCapacity = ({ id, className }: Props) => {
   const isFull = capacity.data.filledPercent.eq(100)
 
   return (
-    <SContainer ref={ref} className={className}>
-      <Separator sx={{ mb: 15, display: ["none", "inherit"] }} />
+    <SContainer className={className}>
       <div sx={{ flex: ["column-reverse", "column"] }}>
         {!isError && (
           <div>
@@ -46,9 +43,15 @@ export const PoolCapacity = ({ id, className }: Props) => {
             </Trans>
           </div>
         )}
-        <SBarContainer>
-          <SBar filled={filled} width={width} isFull={isFull} />
-        </SBarContainer>
+
+        <LinearProgress
+          size="small"
+          percent={Number(filled)}
+          withoutLabel
+          colorCustom={isFull ? theme.gradients.pinkDarkPink : undefined}
+          color="pink600"
+          colorEnd="brightBlue600"
+        />
       </div>
     </SContainer>
   )

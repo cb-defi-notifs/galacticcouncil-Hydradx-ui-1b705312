@@ -13,11 +13,13 @@ import { AssetsModalContent } from "sections/assets/AssetsModal"
 import { getFixedPointAmount } from "utils/balance"
 import { BN_10 } from "utils/constants"
 import { FormValues } from "utils/helpers"
-import { useAccountStore, useStore } from "state/store"
+import { useStore } from "state/store"
 import { OrderAssetSelect } from "./cmp/AssetSelect"
 import { OrderAssetRate } from "./cmp/AssetXRate"
 import { PartialOrderToggle } from "./cmp/PartialOrderToggle"
 import { useRpcProvider } from "providers/rpcProvider"
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
+import { useAssets } from "providers/assets"
 
 type PlaceOrderProps = {
   assetOut?: u32 | string
@@ -35,7 +37,8 @@ export const PlaceOrder = ({
   onSuccess,
 }: PlaceOrderProps) => {
   const { t } = useTranslation()
-  const { account } = useAccountStore()
+  const { account } = useAccount()
+  const { getAssetWithFallback } = useAssets()
 
   const [aOut, setAOut] = useState(assetOut)
   const [aIn, setAIn] = useState(assetIn)
@@ -50,15 +53,15 @@ export const PlaceOrder = ({
     mode: "onChange",
   })
 
+  const { api } = useRpcProvider()
+  const assetOutMeta = aOut ? getAssetWithFallback(aOut.toString()) : undefined
+  const assetOutBalance = useTokenBalance(aOut, account?.address)
+  const assetInMeta = aIn ? getAssetWithFallback(aIn.toString()) : undefined
+  const assetInBalance = useTokenBalance(aIn, account?.address)
+
   useEffect(() => {
     form.trigger()
-  }, [form])
-
-  const { api, assets } = useRpcProvider()
-  const assetOutMeta = aOut ? assets.getAsset(aOut.toString()) : undefined
-  const assetOutBalance = useTokenBalance(aOut, account?.address)
-  const assetInMeta = aIn ? assets.getAsset(aIn.toString()) : undefined
-  const assetInBalance = useTokenBalance(aIn, account?.address)
+  }, [aIn, aOut, form])
 
   const { createTransaction } = useStore()
 
@@ -255,6 +258,11 @@ export const PlaceOrder = ({
                     control={form.control}
                     rules={{
                       required: true,
+                      validate: {
+                        differentFromAmountOut: (value) =>
+                          aIn !== aOut ||
+                          t("otc.order.place.validation.sameAssets"),
+                      },
                     }}
                     render={({
                       field: { name, value, onChange },
@@ -308,7 +316,7 @@ export const PlaceOrder = ({
                   <Button
                     sx={{ mt: 20 }}
                     variant="primary"
-                    disabled={!form.formState.isValid}
+                    disabled={!form.formState.isValid || aIn === aOut}
                   >
                     {t("otc.order.place.confirm")}
                   </Button>
@@ -319,10 +327,12 @@ export const PlaceOrder = ({
           {
             title: t("selectAsset.title"),
             noPadding: true,
-            headerVariant: "FontOver",
+            headerVariant: "GeistMono",
             content: (
               <AssetsModalContent
                 allAssets
+                withBonds
+                withExternal
                 onSelect={(asset) => {
                   setAIn(asset.id)
                   paginateTo(0)
@@ -333,9 +343,11 @@ export const PlaceOrder = ({
           {
             title: t("selectAsset.title"),
             noPadding: true,
-            headerVariant: "FontOver",
+            headerVariant: "GeistMono",
             content: (
               <AssetsModalContent
+                withBonds
+                withExternal
                 onSelect={(asset) => {
                   form.trigger()
                   setAOut(asset.id)

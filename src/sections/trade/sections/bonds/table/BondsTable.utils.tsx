@@ -11,6 +11,7 @@ import { Text } from "components/Typography/Text/Text"
 import { theme } from "theme"
 import { ButtonTransparent } from "components/Button/Button"
 import ChevronDownIcon from "assets/icons/ChevronDown.svg?react"
+import ChevronRightIcon from "assets/icons/ChevronRight.svg?react"
 import { useTranslation } from "react-i18next"
 import { formatDate } from "utils/formatting"
 import { useMedia } from "react-use"
@@ -21,8 +22,11 @@ import { Icon } from "components/Icon/Icon"
 import { AssetLogo } from "components/AssetIcon/AssetIcon"
 import { useNavigate } from "@tanstack/react-location"
 import { LINKS } from "utils/navigation"
-import { useRpcProvider } from "providers/rpcProvider"
 import { Transaction } from "./transactions/Transactions.utils"
+import { useDisplayPrice } from "utils/displayAsset"
+import { DollarAssetValue } from "components/DollarAssetValue/DollarAssetValue"
+import { DisplayValue } from "components/DisplayValue/DisplayValue"
+import { useAssets } from "providers/assets"
 
 export type BondTableItem = {
   assetId: string
@@ -35,6 +39,8 @@ export type BondTableItem = {
   assetIn?: string
   averagePrice: BN | undefined
   events: Transaction[]
+  name: string
+  symbol: string
 }
 
 export type Config = {
@@ -44,9 +50,9 @@ export type Config = {
   onTransfer: (assetId: string) => void
 }
 
-const BondCell = ({ bondId }: { bondId: string }) => {
-  const { assets } = useRpcProvider()
-  const bond = assets.getBond(bondId)
+export const BondCell = ({ bondId }: { bondId: string }) => {
+  const { getBond } = useAssets()
+  const bond = getBond(bondId)
 
   if (!bond) return null
 
@@ -55,19 +61,20 @@ const BondCell = ({ bondId }: { bondId: string }) => {
       sx={{
         flex: "row",
         align: "center",
-        gap: 16,
+        gap: 8,
       }}
     >
       <Icon
-        icon={<AssetLogo id={bond.assetId} />}
-        size={[24, 30]}
-        css={{ flex: "1 0 auto" }}
+        icon={<AssetLogo id={bond.underlyingAssetId} />}
+        size={[24, 27]}
+        sx={{ flexShrink: 0 }}
+        css={{ width: "min-content" }}
       />
       <div sx={{ flex: "column" }}>
-        <Text fs={16} sx={{ mt: 3 }} font="ChakraPetchSemiBold">
+        <Text fs={14} sx={{ mt: 3 }} font="GeistSemiBold">
           {bond.symbol}
         </Text>
-        <Text fs={13} sx={{ mt: 3 }} color={"whiteish500"}>
+        <Text fs={13} sx={{ mt: 3 }} color="whiteish500">
           {bond.name}
         </Text>
       </div>
@@ -78,6 +85,7 @@ const BondCell = ({ bondId }: { bondId: string }) => {
 export const useActiveBondsTable = (data: BondTableItem[], config: Config) => {
   const { t } = useTranslation()
   const { accessor, display } = createColumnHelper<BondTableItem>()
+  const { getAsset } = useAssets()
 
   const claim = useClaimBond()
   const navigate = useNavigate()
@@ -88,27 +96,28 @@ export const useActiveBondsTable = (data: BondTableItem[], config: Config) => {
     maturity: isDesktop,
     balance: true,
     price: isDesktop,
-    actions: true,
+    averagePrice: isDesktop,
+    actions: isDesktop,
   }
 
   const columns = useMemo(
     () => [
       accessor("bondId", {
-        header: t("bonds.table.bond"),
+        header: t("bond"),
         cell: ({ getValue }) =>
           getValue() ? <BondCell bondId={getValue()} /> : null,
       }),
       accessor("maturity", {
         header: () => (
           <div sx={{ textAlign: ["right", "center"] }}>
-            {t("bonds.table.maturity")}
+            {t("bonds.maturity")}
           </div>
         ),
         cell: ({ getValue }) => {
           const value = getValue()
 
           return value !== undefined ? (
-            <Text color="white" tAlign="right">
+            <Text fs={14} color="white" tAlign="right">
               {formatDate(new Date(value), "dd/MM/yyyy")}
             </Text>
           ) : null
@@ -118,11 +127,7 @@ export const useActiveBondsTable = (data: BondTableItem[], config: Config) => {
         header: () => (
           <div sx={{ textAlign: "center" }}>{t("bonds.table.balance")}</div>
         ),
-        cell: ({ getValue }) => (
-          <Text color="white" tAlign="center">
-            {t("value.token", { value: getValue() })}
-          </Text>
-        ),
+        cell: ({ row }) => <BondBalance bond={row.original} />,
       }),
       accessor("averagePrice", {
         header: () => (
@@ -130,11 +135,21 @@ export const useActiveBondsTable = (data: BondTableItem[], config: Config) => {
             {t("bonds.table.price")}
           </div>
         ),
-        cell: ({ getValue }) => (
-          <Text color="white" tAlign="center">
-            {t("value.token", { value: getValue() })}
-          </Text>
-        ),
+        cell: ({ getValue, row }) => {
+          const accumulatedAssetId = row.original.assetIn
+          const meta = accumulatedAssetId
+            ? getAsset(accumulatedAssetId)
+            : undefined
+
+          return (
+            <Text fs={14} color="white" tAlign="center">
+              {t("value.tokenWithSymbol", {
+                value: getValue(),
+                symbol: meta?.symbol,
+              })}
+            </Text>
+          )
+        },
       }),
       display({
         id: "actions",
@@ -159,7 +174,7 @@ export const useActiveBondsTable = (data: BondTableItem[], config: Config) => {
                   }
                   disabled={!isSale}
                 >
-                  {t("bond.btn")}
+                  {t("bonds.btn")}
                 </TableAction>
               )}
               {
@@ -204,7 +219,7 @@ export const useActiveBondsTable = (data: BondTableItem[], config: Config) => {
       }),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [config.showTransactions, config.showTransfer, claim.isLoading],
+    [config.showTransactions, config.showTransfer, claim.isLoading, isDesktop],
   )
 
   return useReactTable({
@@ -214,4 +229,56 @@ export const useActiveBondsTable = (data: BondTableItem[], config: Config) => {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   })
+}
+
+const BondBalance = ({ bond }: { bond: BondTableItem }) => {
+  const { t } = useTranslation()
+  const isDesktop = useMedia(theme.viewport.gte.sm)
+
+  const displayPrice = useDisplayPrice(bond.bondId)
+  const usdValue =
+    displayPrice.data?.spotPrice.isPositive() && bond.balanceHuman
+      ? displayPrice.data?.spotPrice.times(bond.balanceHuman)
+      : undefined
+
+  return (
+    <div
+      sx={{
+        flex: "row",
+        gap: 1,
+        align: "center",
+        justify: ["end", "center"],
+        textAlign: "center",
+      }}
+    >
+      <div sx={{ flex: "column", gap: 2 }}>
+        <Text fs={14} color="white" tAlign="center">
+          {t("value.token", { value: bond.balanceHuman })}
+        </Text>
+        {usdValue && (
+          <DollarAssetValue
+            value={usdValue}
+            wrapper={(children) => (
+              <Text
+                fs={13}
+                lh={13}
+                fw={500}
+                css={{ color: `rgba(${theme.rgbColors.paleBlue}, 0.61)` }}
+              >
+                {children}
+              </Text>
+            )}
+          >
+            <DisplayValue value={usdValue} />
+          </DollarAssetValue>
+        )}
+      </div>
+
+      {!isDesktop && (
+        <ButtonTransparent css={{ color: theme.colors.iconGray }}>
+          <Icon sx={{ color: "darkBlue300" }} icon={<ChevronRightIcon />} />
+        </ButtonTransparent>
+      )}
+    </div>
+  )
 }

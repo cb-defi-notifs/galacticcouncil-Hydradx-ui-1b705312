@@ -21,10 +21,6 @@ export const SContainer = styled.div`
 
   height: fit-content;
   width: 100%;
-
-  @media ${theme.viewport.gte.sm} {
-    width: auto;
-  }
 `
 
 export const SJoinButton = styled.button`
@@ -37,7 +33,7 @@ export const SJoinButton = styled.button`
 
   background: ${theme.colors.brightBlue300};
 
-  padding: 9px 0;
+  padding: 8px 0;
 
   width: 118px;
   &:disabled {

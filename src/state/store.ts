@@ -1,14 +1,14 @@
 import { create } from "zustand"
-import { persist } from "zustand/middleware"
+import { StateStorage, createJSONStorage, persist } from "zustand/middleware"
 import { SubmittableExtrinsic } from "@polkadot/api/promise/types"
 import { ISubmittableResult } from "@polkadot/types/types"
-import { getWalletBySource } from "@talismn/connect-wallets"
-import { POLKADOT_APP_NAME } from "utils/api"
 import { v4 as uuid } from "uuid"
 import { ReactElement } from "react"
 import BigNumber from "bignumber.js"
-import { safeConvertAddressSS58 } from "utils/formatting"
 import { StepProps } from "components/Stepper/Stepper"
+import { XCallEvm } from "@galacticcouncil/xcm-sdk"
+import { arraysEqual } from "utils/helpers"
+import { Asset } from "@galacticcouncil/sdk"
 
 export interface ToastMessage {
   onLoading?: ReactElement
@@ -26,10 +26,14 @@ export interface Account {
 
 export interface TransactionInput {
   title?: string
-  tx: SubmittableExtrinsic
+  description?: string
+  tx?: SubmittableExtrinsic
+  xcall?: XCallEvm
+  xcallMeta?: Record<string, string>
   overrides?: {
     fee: BigNumber
     currencyId?: string
+    feeExtra?: BigNumber
   }
 }
 
@@ -43,21 +47,26 @@ export interface Transaction extends TransactionInput {
   steps?: Array<StepProps>
   onBack?: () => void
   onClose?: () => void
+  disableAutoClose?: boolean
+}
+
+export type TransactionOptions = {
+  onSuccess?: (result: ISubmittableResult) => void
+  onSubmitted?: () => void
+  toast?: ToastMessage
+  isProxy?: boolean
+  steps?: Array<StepProps>
+  onBack?: () => void
+  onClose?: () => void
+  onError?: () => void
+  disableAutoClose?: boolean
 }
 
 interface Store {
   transactions?: Transaction[]
   createTransaction: (
     transaction: TransactionInput,
-    options?: {
-      onSuccess?: (result: ISubmittableResult) => void
-      onSubmitted?: () => void
-      toast?: ToastMessage
-      isProxy?: boolean
-      steps?: Array<StepProps>
-      onBack?: () => void
-      onClose?: () => void
-    },
+    options?: TransactionOptions,
   ) => Promise<ISubmittableResult>
   cancelTransaction: (hash: string) => void
 }
@@ -71,91 +80,6 @@ type RpcStore = {
   removeRpc: (url: string) => void
   renameRpc: (url: string, newName: string) => void
 }
-
-export const externalWallet = {
-  provider: "external",
-  name: "External Account",
-  proxyName: "Proxy Account",
-}
-
-export const PROXY_WALLET_PROVIDER = "polkadot-js"
-
-export const useAccountStore = create(
-  persist<{
-    account?: Account
-    setAccount: (account: Account | undefined) => void
-  }>(
-    (set) => ({
-      setAccount: (account) => set({ account }),
-    }),
-    {
-      name: "account",
-      getStorage: () => ({
-        async getItem(name: string) {
-          // attempt to activate the account
-          const value = window.localStorage.getItem(name)
-          if (value == null) return value
-
-          let externalWalletAddress: string | null = null
-          if (import.meta.env.VITE_FF_EXTERNAL_WALLET_ENABLED === "true") {
-            // check if there is an external account address within URL
-            const search = window.location.href.split("?").pop()
-            externalWalletAddress = new URLSearchParams(search).get("account")
-          }
-
-          try {
-            const { state } = JSON.parse(value)
-
-            // if there is an external account set it as a user wallet account
-            const parsedAccount = JSON.parse(value)
-            if (
-              !!externalWalletAddress &&
-              safeConvertAddressSS58(externalWalletAddress, 0)
-            ) {
-              const externalAccount = {
-                name: externalWallet.name,
-                address: externalWalletAddress,
-                provider: externalWallet.provider,
-                isExternalWalletConnected: true,
-                delegate: parsedAccount.state.account?.delegate,
-              }
-
-              return JSON.stringify({
-                ...parsedAccount,
-                state: { account: externalAccount },
-              })
-            }
-
-            if (parsedAccount.state.account?.provider === "WalletConnect")
-              return value
-
-            if (state.account?.provider == null) return null
-
-            const wallet = getWalletBySource(state.account.provider)
-            await wallet?.enable(POLKADOT_APP_NAME)
-            const accounts = await wallet?.getAccounts()
-
-            const foundAccount = accounts?.find(
-              (i) => i.address === state.account.address,
-            )
-
-            if (!foundAccount) throw new Error("Account not found")
-            return value
-          } catch (err) {
-            console.error(err)
-            return null
-          }
-        },
-        setItem(name, value) {
-          window.localStorage.setItem(name, value)
-        },
-        removeItem(name) {
-          window.localStorage.removeItem(name)
-        },
-      }),
-    },
-  ),
-)
 
 export const useStore = create<Store>((set) => ({
   createTransaction: (transaction, options) => {
@@ -178,11 +102,15 @@ export const useStore = create<Store>((set) => ({
                 resolve(value)
                 options?.onSuccess?.(value)
               },
-              onError: () => reject(new Error("Transaction rejected")),
+              onError: () => {
+                options?.onError?.()
+                reject(new Error("Transaction rejected"))
+              },
               isProxy: !!options?.isProxy,
               steps: options?.steps,
               onBack: options?.onBack,
               onClose: options?.onClose,
+              disableAutoClose: options?.disableAutoClose,
             },
             ...(store.transactions ?? []),
           ],
@@ -219,6 +147,149 @@ export const useRpcStore = create<RpcStore>()(
     }),
     {
       name: "hydradx-rpc-list",
+    },
+  ),
+)
+
+export type TAssetStored = Omit<Asset, "externalId"> & {
+  isTradable: boolean
+  externalId: string | undefined
+}
+export type TShareTokenStored = {
+  poolAddress: string
+  assets: string[]
+  shareTokenId: string
+}
+
+type AssetRegistryStore = {
+  assets: Array<TAssetStored>
+  shareTokens: Array<TShareTokenStored>
+  sync: (assets: TAssetStored[]) => void
+  syncShareTokens: (shareTokens: TShareTokenStored[]) => void
+}
+
+export enum IndexedDBStores {
+  Assets = "assets",
+}
+
+const db: IDBDatabase | null = await new Promise((resolve) => {
+  const request = indexedDB.open("storage")
+
+  request.onsuccess = () => resolve(request.result)
+
+  request.onupgradeneeded = () => {
+    const db = request.result
+
+    if (!db.objectStoreNames.contains(IndexedDBStores.Assets)) {
+      db.createObjectStore(IndexedDBStores.Assets, { keyPath: "key" })
+    }
+  }
+
+  request.onerror = () => resolve(null)
+})
+
+type StoreKey = "tokens" | "shareTokens"
+
+const getItems = async (
+  db: IDBDatabase,
+): Promise<{ tokens: object[]; shareTokens: object[] }> =>
+  await new Promise((resolve) => {
+    const tx = db.transaction(IndexedDBStores.Assets, "readonly")
+    const store = tx.objectStore(IndexedDBStores.Assets)
+    const res = store.getAll()
+
+    res.onsuccess = () => {
+      const data = res.result
+      const tokens = data.find((e) => e.key === "tokens")?.data ?? []
+      const shareTokens = data.find((e) => e.key === "shareTokens")?.data ?? []
+
+      resolve({ tokens, shareTokens })
+    }
+  })
+
+const setItems = async (db: IDBDatabase, data: object[], key: StoreKey) =>
+  await new Promise((resolve) => {
+    const tx = db.transaction(IndexedDBStores.Assets, "readwrite")
+    const store = tx.objectStore(IndexedDBStores.Assets)
+    store.put({ key, data })
+
+    resolve(data)
+  })
+
+const storage: StateStorage = {
+  getItem: async () => {
+    const storage = await db
+    if (!storage) return null
+
+    const { tokens, shareTokens } = await getItems(storage)
+
+    return JSON.stringify({
+      version: 0,
+      state: { assets: tokens, shareTokens },
+    })
+  },
+  setItem: async (_, value) => {
+    const parsedState = JSON.parse(value)
+    const storage = await db
+
+    if (storage) {
+      const { tokens, shareTokens } = await getItems(storage)
+
+      const areTokensEqual = arraysEqual(parsedState.state.assets, tokens)
+      const areShareTokensEqual = arraysEqual(
+        parsedState.state.shareTokens,
+        shareTokens,
+      )
+
+      if (!areTokensEqual) {
+        setItems(storage, parsedState.state.assets, "tokens")
+      }
+
+      if (!areShareTokensEqual) {
+        setItems(storage, parsedState.state.shareTokens, "shareTokens")
+      }
+    }
+  },
+  removeItem: () => {},
+}
+
+export const useAssetRegistry = create<AssetRegistryStore>()(
+  persist(
+    (set) => ({
+      assets: [],
+      shareTokens: [],
+      sync(assets) {
+        set({
+          assets,
+        })
+      },
+      syncShareTokens(shareTokens) {
+        set({
+          shareTokens,
+        })
+      },
+    }),
+    {
+      name: "asset-registry",
+      storage: createJSONStorage(() => storage),
+    },
+  ),
+)
+
+type SettingsStore = {
+  degenMode: boolean
+  toggleDegenMode: () => void
+}
+
+export const useSettingsStore = create<SettingsStore>()(
+  persist(
+    (set) => ({
+      degenMode: false,
+      toggleDegenMode: () => set((store) => ({ degenMode: !store.degenMode })),
+    }),
+    {
+      name: "settings",
+      version: 1,
     },
   ),
 )

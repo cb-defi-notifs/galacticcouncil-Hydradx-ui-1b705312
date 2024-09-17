@@ -1,6 +1,6 @@
 import { Text } from "components/Typography/Text/Text"
-import { AssetLogo } from "components/AssetIcon/AssetIcon"
-import { Icon } from "components/Icon/Icon"
+import { MultipleAssetLogo } from "components/AssetIcon/AssetIcon"
+import { useAssets } from "providers/assets"
 
 type Props = {
   name: string
@@ -10,10 +10,14 @@ type Props = {
 }
 
 export const RemoveLiquidityReward = ({ name, symbol, amount, id }: Props) => {
+  const { getAssetWithFallback } = useAssets()
+  const meta = getAssetWithFallback(id)
+
   return (
     <div sx={{ flex: "row", justify: "space-between", align: "center" }}>
       <div sx={{ flex: "row", align: "center", gap: 8 }}>
-        <Icon size={28} icon={<AssetLogo id={id} />} />
+        <MultipleAssetLogo size={28} iconId={meta.iconId} />
+
         <div sx={{ flex: "column" }}>
           <Text fs={[14, 16]}>{symbol}</Text>
           <Text fs={[10, 12]} color="neutralGray500">

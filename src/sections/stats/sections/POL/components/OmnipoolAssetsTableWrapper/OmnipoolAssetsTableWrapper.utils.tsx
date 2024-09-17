@@ -1,5 +1,4 @@
-import { Icon } from "components/Icon/Icon"
-import { AssetLogo } from "components/AssetIcon/AssetIcon"
+import { MultipleAssetLogo } from "components/AssetIcon/AssetIcon"
 import { Text } from "components/Typography/Text/Text"
 import { theme } from "theme"
 import { DisplayValue } from "components/DisplayValue/DisplayValue"
@@ -29,7 +28,8 @@ export const useOmnipoolAssetsColumns = (): OmnipoolAssetsTableColumn[] => {
             justify: "start",
           }}
         >
-          <Icon size={26} icon={<AssetLogo id={row.original.id} />} />
+          <MultipleAssetLogo size={[26, 30]} iconId={row.original.iconIds} />
+
           <div sx={{ flex: "column" }}>
             <Text fs={[14, 16]} color="white">
               {row.original.symbol}
@@ -46,11 +46,11 @@ export const useOmnipoolAssetsColumns = (): OmnipoolAssetsTableColumn[] => {
       ),
     }),
     accessor("pol", {
-      id: "pol",
+      id: "treasury",
       header: t("stats.pol.table.assets.header.pol"),
       sortingFn: (a, b) => (a.original.pol.gt(b.original.pol) ? 1 : -1),
       cell: ({ row }) => (
-        <Text tAlign="center" color="white">
+        <Text tAlign={["right", "left"]} color="white" fs={[13, 16]}>
           <DisplayValue value={row.original.pol} isUSD />
         </Text>
       ),
@@ -58,10 +58,11 @@ export const useOmnipoolAssetsColumns = (): OmnipoolAssetsTableColumn[] => {
     accessor("volume", {
       id: "volume",
       header: t("stats.pol.table.assets.header.volume"),
-      sortingFn: (a, b) => (a.original.volume.gt(b.original.volume) ? 1 : -1),
+      sortingFn: (a, b) =>
+        a.original.volumePol.gt(b.original.volumePol) ? 1 : -1,
       cell: ({ row }) => (
-        <Text tAlign="center" color="white">
-          <DisplayValue value={row.original.volume} isUSD />
+        <Text color="white">
+          <DisplayValue value={row.original.volumePol} isUSD />
         </Text>
       ),
     }),

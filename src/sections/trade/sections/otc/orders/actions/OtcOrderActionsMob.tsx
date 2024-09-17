@@ -6,7 +6,7 @@ import { Separator } from "components/Separator/Separator"
 import { Text } from "components/Typography/Text/Text"
 import { useTranslation } from "react-i18next"
 import { OrderCapacity } from "sections/trade/sections/otc/capacity/OrderCapacity"
-import { useAccountStore } from "state/store"
+import { useAccount } from "sections/web3-connect/Web3Connect.utils"
 import { theme } from "theme"
 import { HYDRA_ADDRESS_PREFIX } from "utils/api"
 import { safeConvertAddressSS58 } from "utils/formatting"
@@ -32,7 +32,7 @@ export const OtcOrderActionsMob = ({
   onCloseOrder,
 }: Props) => {
   const { t } = useTranslation()
-  const { account } = useAccountStore()
+  const { account } = useAccount()
 
   if (!row) return null
 
@@ -56,10 +56,10 @@ export const OtcOrderActionsMob = ({
           >
             <OrderPairColumn
               accepting={row.accepting}
-              offering={row.offering}
+              offering={row.offer}
               pol={row.pol}
             />
-            <OrderPriceColumn symbol={row.accepting.symbol} price={row.price} />
+            <OrderPriceColumn pair={row.offer} price={row.orderPrice} />
           </div>
         </div>
         <Separator
@@ -68,9 +68,9 @@ export const OtcOrderActionsMob = ({
         <div sx={{ flex: "row", justify: "space-between", py: 30 }}>
           <div sx={{ flex: "column", gap: 4 }}>
             <Text fs={14} lh={16} color="whiteish500">
-              {t("otc.offers.table.header.offering")}
+              {t("otc.offers.table.header.offer")}
             </Text>
-            <OrderAssetColumn pair={row.offering} />
+            <OrderAssetColumn pair={row.offer} />
           </div>
           <div sx={{ flex: "column", gap: 4 }}>
             <Text fs={14} lh={16} color="whiteish500">

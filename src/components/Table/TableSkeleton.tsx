@@ -18,7 +18,7 @@ import { Fragment, ReactNode } from "react"
 
 type Props = {
   table: ReactTable<unknown>
-  title?: string
+  title?: string | ReactNode
   placeholder?: ReactNode
   className?: string
   hideHeader?: boolean
@@ -38,7 +38,7 @@ export const TableSkeleton = ({
           <Text
             fs={[16, 20]}
             lh={[20, 26]}
-            css={{ fontFamily: "FontOver" }}
+            font="GeistMono"
             fw={500}
             color="white"
           >
@@ -54,9 +54,16 @@ export const TableSkeleton = ({
           {!hideHeader && (
             <TableHeaderContent>
               {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id}>
+                <TableRow key={hg.id} header>
                   {hg.headers.map((header) => (
-                    <TableSortHeader key={header.id} canSort={false}>
+                    <TableSortHeader
+                      key={header.id}
+                      canSort={false}
+                      css={{
+                        width:
+                          header.getSize() !== 150 ? header.getSize() : "auto",
+                      }}
+                    >
                       {flexRender(
                         header.column.columnDef.header,
                         header.getContext(),
@@ -70,9 +77,9 @@ export const TableSkeleton = ({
           <TableBodyContent>
             {table.getRowModel().rows.map((row, i) => (
               <Fragment key={row.id}>
-                <TableRow isOdd={!(i % 2)}>
+                <TableRow>
                   {row.getVisibleCells().map((cell) => (
-                    <TableData key={cell.id}>
+                    <TableData key={cell.id} isSkeleton>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext(),
@@ -100,14 +107,13 @@ export const TableStatsSkeleton = ({
     <StatsTableContainer className={className}>
       {title && (
         <StatsTableTitle>
-          <Text
-            fs={[16, 24]}
-            lh={[24, 26]}
-            color="white"
-            font="ChakraPetchBold"
-          >
-            {title}
-          </Text>
+          {typeof title === "string" ? (
+            <Text fs={[15, 19]} lh={20} color="white" font="GeistMono">
+              {title}
+            </Text>
+          ) : (
+            title
+          )}
         </StatsTableTitle>
       )}
       <div css={{ position: "relative" }}>

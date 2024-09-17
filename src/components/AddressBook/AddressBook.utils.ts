@@ -1,32 +1,11 @@
 import { getWalletBySource } from "@talismn/connect-wallets"
 import { useQuery } from "@tanstack/react-query"
-import { useMemo } from "react"
-import { useAccountStore } from "state/store"
+import { safeConvertAddressH160 } from "utils/evm"
+import { safeConvertAddressSS58 } from "utils/formatting"
 import { QUERY_KEYS } from "utils/queryKeys"
+import { diffBy } from "utils/rx"
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
-
-export const useWalletAddresses = () => {
-  const { account } = useAccountStore()
-  const storageAddresses = useAddressStore()
-  const providerAddresses = useProviderAccounts(account?.provider)
-
-  const data = useMemo(() => {
-    if (!providerAddresses.data) return []
-
-    let addresses: Address[] = providerAddresses.data.map((pa) => {
-      const name = pa.name ?? ""
-      const address = pa.address
-      const provider = account?.provider ?? "external"
-      return { name, address, provider }
-    })
-    addresses = [...addresses, ...storageAddresses.addresses]
-
-    return addresses
-  }, [providerAddresses.data, storageAddresses.addresses, account?.provider])
-
-  return { data, isLoading: providerAddresses.isLoading }
-}
 
 export const useProviderAccounts = (
   provider: string | undefined,
@@ -42,12 +21,17 @@ export const useProviderAccounts = (
   )
 }
 
-type Address = { name: string; address: string; provider: string }
+export type Address = {
+  id?: string
+  name: string
+  address: string
+  provider: string
+}
 export type AddressStore = {
   addresses: Address[]
-  add: (address: Address) => void
+  add: (address: Address | Address[]) => void
   edit: (address: Address) => void
-  remove: (address: string) => void
+  remove: (id: string) => void
 }
 
 export const useAddressStore = create<AddressStore>()(
@@ -56,29 +40,41 @@ export const useAddressStore = create<AddressStore>()(
       addresses: [],
 
       add: (address) =>
-        set((state) => ({
-          addresses: [
-            ...state.addresses,
-            { ...address, id: crypto.randomUUID() },
-          ],
-        })),
-
-      edit: (address) =>
         set((state) => {
-          let found = state.addresses.find((a) => a.address === address.address)
-          if (!found) return state
+          const addresses = Array.isArray(address) ? address : [address]
 
-          found = { ...found, ...address }
-          const rest = state.addresses.filter(
-            (a) => a.address !== address.address,
+          const uniqueAddresses = diffBy(
+            ({ address }) =>
+              safeConvertAddressH160(address) ||
+              safeConvertAddressSS58(address, 0) ||
+              "",
+            addresses,
+            state.addresses,
           )
 
-          return { addresses: [...rest, found] }
+          if (!uniqueAddresses.length) return { addresses: state.addresses }
+
+          return {
+            addresses: [
+              ...state.addresses,
+              ...uniqueAddresses.map((address) => ({
+                ...address,
+                id: crypto.randomUUID(),
+              })),
+            ],
+          }
         }),
 
-      remove: (address) =>
+      edit: (address) =>
         set((state) => ({
-          addresses: state.addresses.filter((a) => a.address !== address),
+          addresses: state.addresses.map((a) =>
+            a.id === address.id ? { ...a, ...address } : a,
+          ),
+        })),
+
+      remove: (id) =>
+        set((state) => ({
+          addresses: state.addresses.filter((a) => a.id !== id),
         })),
     }),
     { name: "address-book" },

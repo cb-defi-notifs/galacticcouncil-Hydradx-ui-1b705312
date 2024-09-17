@@ -10,18 +10,25 @@ export const SList = styled.nav`
 
   @media ${theme.viewport.gte.sm} {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    margin-left: 30px;
+
+    height: 34px;
+
+    gap: 12px;
+
+    overflow: hidden;
   }
 `
 export const SItem = styled.span<{ isActive?: boolean }>`
   display: flex;
   align-items: center;
 
-  margin-right: 12px;
   padding: 8px 12px;
 
-  font-size: 15px;
+  height: 34px;
+
+  font-size: 14px;
   font-weight: 500;
   line-height: 18px;
 
@@ -29,8 +36,12 @@ export const SItem = styled.span<{ isActive?: boolean }>`
   white-space: nowrap;
   text-transform: uppercase;
 
+  position: relative;
+
   border-radius: 4px;
-  transition: ${theme.transitions.slow};
+  transition:
+    color ${theme.transitions.slow},
+    background ${theme.transitions.slow};
 
   &:hover {
     color: ${theme.colors.white};
@@ -100,6 +111,40 @@ export const SSubMenuItem = styled(ButtonTransparent)`
 
     ${SArrow} {
       color: ${theme.colors.brightBlue600};
+    }
+  }
+`
+export const SNoFunBadge = styled.span`
+  position: relative;
+
+  font-size: 8px;
+  line-height: 9px;
+  font-weight: 800;
+  font-family: "GeistSemiBold";
+  text-transform: uppercase;
+  white-space: nowrap;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 2px;
+
+  span {
+    padding: 1px 2px;
+    background: ${theme.colors.white};
+    color: ${theme.colors.black};
+    border-top-right-radius: 2px;
+    border-bottom-right-radius: 2px;
+  }
+
+  span {
+    &:nth-of-type(1) {
+      color: ${theme.colors.white};
+      border-radius: 0;
+      border-top-left-radius: 2px;
+      border-bottom-left-radius: 2px;
+      background: #ff1f1f;
     }
   }
 `
